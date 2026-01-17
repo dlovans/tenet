@@ -1,0 +1,75 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "safety_compliance",
+    "version": "2026.01.17",
+    "definitions": {
+        "employee_count": {
+            "type": "number",
+            "value": 50,
+            "required": true
+        },
+        "training_completed": {
+            "type": "boolean",
+            "value": true
+        },
+        "safety_certified": {
+            "type": "boolean",
+            "value": false
+        },
+        "can_submit": {
+            "type": "boolean",
+            "value": false
+        }
+    },
+    "attestations": {
+        "officer_safety_attestation": {
+            "law_ref": "OSHA Section 1910.12",
+            "statement": "I certify that all employees have completed safety training for the 2026 period.",
+            "required_role": "Compliance_Officer",
+            "provider": "DocuSign",
+            "required": true,
+            "signed": true,
+            "evidence": {
+                "provider_audit_id": "ds_9923_xf",
+                "timestamp": "2026-01-14T21:00:00Z",
+                "signer_id": "jane.doe@company.com",
+                "logic_version": "v2.1.0"
+            },
+            "on_sign": {
+                "set": {
+                    "safety_certified": true,
+                    "can_submit": true
+                }
+            }
+        },
+        "manager_approval": {
+            "law_ref": "Internal Policy §3.2",
+            "statement": "I approve this safety report for submission.",
+            "required_role": "Manager",
+            "provider": "Manual",
+            "required": false,
+            "signed": false
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "large_workforce_extra_review",
+            "when": {
+                ">": [
+                    {
+                        "var": "employee_count"
+                    },
+                    100
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "manager_approval": {
+                        "required": true
+                    }
+                },
+                "error_msg": "Workforces over 100 require manager approval."
+            }
+        }
+    ]
+}
