@@ -1,0 +1,215 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "recipe_scaler",
+    "version": "2025.01.16",
+    "definitions": {
+        "base_servings": {
+            "type": "number",
+            "value": 4,
+            "min": 1,
+            "label": "Original recipe servings"
+        },
+        "target_servings": {
+            "type": "number",
+            "value": 8,
+            "min": 1,
+            "max": 50,
+            "label": "How many servings do you need?",
+            "required": true
+        },
+        "flour_cups": {
+            "type": "number",
+            "value": 2,
+            "step": 0.25,
+            "label": "Flour (cups)"
+        },
+        "sugar_cups": {
+            "type": "number",
+            "value": 1,
+            "step": 0.25,
+            "label": "Sugar (cups)"
+        },
+        "eggs": {
+            "type": "number",
+            "value": 2,
+            "min": 0,
+            "label": "Eggs"
+        },
+        "butter_tbsp": {
+            "type": "number",
+            "value": 4,
+            "step": 0.5,
+            "label": "Butter (tablespoons)"
+        },
+        "is_vegan": {
+            "type": "boolean",
+            "value": false,
+            "label": "Make it vegan?"
+        },
+        "is_gluten_free": {
+            "type": "boolean",
+            "value": false,
+            "label": "Make it gluten-free?"
+        },
+        "egg_substitute": {
+            "type": "string",
+            "label": "Egg substitute"
+        },
+        "flour_substitute": {
+            "type": "string",
+            "label": "Flour substitute"
+        },
+        "scaled_flour": {
+            "type": "number"
+        },
+        "scaled_sugar": {
+            "type": "number"
+        },
+        "scaled_eggs": {
+            "type": "number"
+        },
+        "scaled_butter": {
+            "type": "number"
+        },
+        "scaling_factor": {
+            "type": "number"
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_vegan_substitutes",
+            "when": {
+                "==": [
+                    {
+                        "var": "is_vegan"
+                    },
+                    true
+                ]
+            },
+            "then": {
+                "set": {
+                    "egg_substitute": "1/4 cup applesauce per egg",
+                    "butter_tbsp": 0
+                },
+                "ui_modify": {
+                    "egg_substitute": {
+                        "visible": true
+                    },
+                    "eggs": {
+                        "ui_message": "Replaced with applesauce"
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_gluten_free",
+            "when": {
+                "==": [
+                    {
+                        "var": "is_gluten_free"
+                    },
+                    true
+                ]
+            },
+            "then": {
+                "set": {
+                    "flour_substitute": "Use 1:1 gluten-free flour blend"
+                },
+                "ui_modify": {
+                    "flour_substitute": {
+                        "visible": true
+                    },
+                    "flour_cups": {
+                        "ui_message": "Use gluten-free substitute"
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_large_batch_warning",
+            "when": {
+                ">": [
+                    {
+                        "var": "target_servings"
+                    },
+                    24
+                ]
+            },
+            "then": {
+                "error_msg": "Large batches (>24 servings) may require adjusted baking times."
+            }
+        }
+    ],
+    "state_model": {
+        "inputs": [
+            "base_servings",
+            "target_servings",
+            "flour_cups",
+            "sugar_cups",
+            "eggs",
+            "butter_tbsp"
+        ],
+        "derived": {
+            "scaling_factor": {
+                "eval": {
+                    "/": [
+                        {
+                            "var": "target_servings"
+                        },
+                        {
+                            "var": "base_servings"
+                        }
+                    ]
+                }
+            },
+            "scaled_flour": {
+                "eval": {
+                    "*": [
+                        {
+                            "var": "flour_cups"
+                        },
+                        {
+                            "var": "scaling_factor"
+                        }
+                    ]
+                }
+            },
+            "scaled_sugar": {
+                "eval": {
+                    "*": [
+                        {
+                            "var": "sugar_cups"
+                        },
+                        {
+                            "var": "scaling_factor"
+                        }
+                    ]
+                }
+            },
+            "scaled_eggs": {
+                "eval": {
+                    "*": [
+                        {
+                            "var": "eggs"
+                        },
+                        {
+                            "var": "scaling_factor"
+                        }
+                    ]
+                }
+            },
+            "scaled_butter": {
+                "eval": {
+                    "*": [
+                        {
+                            "var": "butter_tbsp"
+                        },
+                        {
+                            "var": "scaling_factor"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

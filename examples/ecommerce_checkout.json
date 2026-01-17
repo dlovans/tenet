@@ -1,0 +1,209 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "ecommerce_checkout",
+    "version": "2025.01.16",
+    "definitions": {
+        "cart_total": {
+            "type": "currency",
+            "value": 150.00,
+            "min": 0
+        },
+        "discount_code": {
+            "type": "string",
+            "value": "SAVE20"
+        },
+        "shipping_method": {
+            "type": "select",
+            "value": "standard",
+            "options": [
+                "standard",
+                "express",
+                "overnight"
+            ]
+        },
+        "shipping_cost": {
+            "type": "currency",
+            "value": 0
+        },
+        "discount_amount": {
+            "type": "currency",
+            "value": 0
+        },
+        "free_shipping_eligible": {
+            "type": "boolean",
+            "value": false
+        },
+        "express_available": {
+            "type": "boolean",
+            "value": true
+        },
+        "final_total": {
+            "type": "currency"
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_free_shipping",
+            "when": {
+                ">=": [
+                    {
+                        "var": "cart_total"
+                    },
+                    100
+                ]
+            },
+            "then": {
+                "set": {
+                    "free_shipping_eligible": true,
+                    "shipping_cost": 0
+                },
+                "ui_modify": {
+                    "shipping_method": {
+                        "ui_message": "Free standard shipping on orders over $100!"
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_standard_shipping",
+            "when": {
+                "and": [
+                    {
+                        "<": [
+                            {
+                                "var": "cart_total"
+                            },
+                            100
+                        ]
+                    },
+                    {
+                        "==": [
+                            {
+                                "var": "shipping_method"
+                            },
+                            "standard"
+                        ]
+                    }
+                ]
+            },
+            "then": {
+                "set": {
+                    "shipping_cost": 9.99
+                }
+            }
+        },
+        {
+            "id": "rule_express_shipping",
+            "when": {
+                "==": [
+                    {
+                        "var": "shipping_method"
+                    },
+                    "express"
+                ]
+            },
+            "then": {
+                "set": {
+                    "shipping_cost": 19.99
+                }
+            }
+        },
+        {
+            "id": "rule_overnight_shipping",
+            "when": {
+                "==": [
+                    {
+                        "var": "shipping_method"
+                    },
+                    "overnight"
+                ]
+            },
+            "then": {
+                "set": {
+                    "shipping_cost": 39.99
+                }
+            }
+        },
+        {
+            "id": "rule_discount_save20",
+            "when": {
+                "==": [
+                    {
+                        "var": "discount_code"
+                    },
+                    "SAVE20"
+                ]
+            },
+            "then": {
+                "set": {
+                    "discount_amount": 20
+                }
+            }
+        },
+        {
+            "id": "rule_discount_percent10",
+            "when": {
+                "==": [
+                    {
+                        "var": "discount_code"
+                    },
+                    "PERCENT10"
+                ]
+            },
+            "then": {
+                "set": {
+                    "discount_amount": {
+                        "*": [
+                            {
+                                "var": "cart_total"
+                            },
+                            0.10
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_minimum_order",
+            "when": {
+                "<": [
+                    {
+                        "var": "cart_total"
+                    },
+                    25
+                ]
+            },
+            "then": {
+                "error_msg": "Minimum order is $25."
+            }
+        }
+    ],
+    "state_model": {
+        "inputs": [
+            "cart_total",
+            "shipping_cost",
+            "discount_amount"
+        ],
+        "derived": {
+            "final_total": {
+                "eval": {
+                    "-": [
+                        {
+                            "+": [
+                                {
+                                    "var": "cart_total"
+                                },
+                                {
+                                    "var": "shipping_cost"
+                                }
+                            ]
+                        },
+                        {
+                            "var": "discount_amount"
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

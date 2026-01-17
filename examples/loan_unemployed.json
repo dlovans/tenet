@@ -1,0 +1,246 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "loan_application",
+    "version": "2025.01.16",
+    "valid_from": "2025-01-01",
+    "definitions": {
+        "applicant_income": {
+            "type": "number",
+            "value": 75000,
+            "required": true,
+            "label": "Annual Income"
+        },
+        "loan_amount": {
+            "type": "number",
+            "value": 250000,
+            "required": true,
+            "label": "Requested Loan Amount"
+        },
+        "employment_status": {
+            "type": "select",
+            "value": "unemployed",
+            "options": [
+                "employed",
+                "self_employed",
+                "unemployed",
+                "retired"
+            ],
+            "required": true
+        },
+        "credit_score": {
+            "type": "number",
+            "value": 720,
+            "required": true
+        },
+        "debt_to_income_ratio": {
+            "type": "number",
+            "label": "Debt-to-Income Ratio"
+        },
+        "max_loan_eligible": {
+            "type": "number",
+            "label": "Maximum Eligible Loan"
+        },
+        "approval_status": {
+            "type": "select",
+            "options": [
+                "pending",
+                "approved",
+                "denied",
+                "review_required"
+            ],
+            "value": "pending"
+        },
+        "risk_level": {
+            "type": "select",
+            "options": [
+                "low",
+                "medium",
+                "high"
+            ]
+        },
+        "additional_docs_required": {
+            "type": "boolean",
+            "value": false
+        },
+        "income_verification": {
+            "type": "attestation",
+            "label": "I confirm the income information is accurate and verifiable.",
+            "required": false
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_unemployed_denial",
+            "law_ref": "Lending Standards Act §4.2",
+            "when": {
+                "==": [
+                    {
+                        "var": "employment_status"
+                    },
+                    "unemployed"
+                ]
+            },
+            "then": {
+                "set": {
+                    "approval_status": "denied",
+                    "risk_level": "high"
+                },
+                "error_msg": "Unemployed applicants do not meet minimum employment requirements per Lending Standards Act §4.2."
+            }
+        },
+        {
+            "id": "rule_low_credit_review",
+            "law_ref": "Consumer Credit Reg §12.1",
+            "when": {
+                "<": [
+                    {
+                        "var": "credit_score"
+                    },
+                    650
+                ]
+            },
+            "then": {
+                "set": {
+                    "approval_status": "review_required",
+                    "risk_level": "high",
+                    "additional_docs_required": true
+                },
+                "ui_modify": {
+                    "income_verification": {
+                        "visible": true,
+                        "required": true
+                    }
+                },
+                "error_msg": "Credit score below threshold requires manual review per Consumer Credit Reg §12.1."
+            }
+        },
+        {
+            "id": "rule_high_dti_warning",
+            "law_ref": "Responsible Lending Code §8.3",
+            "when": {
+                ">": [
+                    {
+                        "var": "debt_to_income_ratio"
+                    },
+                    0.43
+                ]
+            },
+            "then": {
+                "set": {
+                    "risk_level": "medium"
+                },
+                "error_msg": "Debt-to-income ratio exceeds 43% guideline per Responsible Lending Code §8.3."
+            }
+        },
+        {
+            "id": "rule_self_employed_docs",
+            "when": {
+                "==": [
+                    {
+                        "var": "employment_status"
+                    },
+                    "self_employed"
+                ]
+            },
+            "then": {
+                "set": {
+                    "additional_docs_required": true
+                },
+                "ui_modify": {
+                    "income_verification": {
+                        "visible": true,
+                        "required": true
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_good_credit_approval",
+            "when": {
+                "and": [
+                    {
+                        ">=": [
+                            {
+                                "var": "credit_score"
+                            },
+                            700
+                        ]
+                    },
+                    {
+                        "in": [
+                            {
+                                "var": "employment_status"
+                            },
+                            [
+                                "employed",
+                                "self_employed"
+                            ]
+                        ]
+                    },
+                    {
+                        "<=": [
+                            {
+                                "var": "debt_to_income_ratio"
+                            },
+                            0.43
+                        ]
+                    }
+                ]
+            },
+            "then": {
+                "set": {
+                    "approval_status": "approved",
+                    "risk_level": "low"
+                }
+            }
+        }
+    ],
+    "state_model": {
+        "inputs": [
+            "applicant_income",
+            "loan_amount"
+        ],
+        "derived": {
+            "debt_to_income_ratio": {
+                "eval": {
+                    "if": [
+                        {
+                            ">": [
+                                {
+                                    "var": "applicant_income"
+                                },
+                                0
+                            ]
+                        },
+                        {
+                            "/": [
+                                {
+                                    "var": "loan_amount"
+                                },
+                                {
+                                    "*": [
+                                        {
+                                            "var": "applicant_income"
+                                        },
+                                        30
+                                    ]
+                                }
+                            ]
+                        },
+                        0
+                    ]
+                }
+            },
+            "max_loan_eligible": {
+                "eval": {
+                    "*": [
+                        {
+                            "var": "applicant_income"
+                        },
+                        4
+                    ]
+                }
+            }
+        }
+    }
+}

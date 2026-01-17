@@ -1,0 +1,285 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "game_character_builder",
+    "version": "2025.01.16",
+    "definitions": {
+        "character_class": {
+            "type": "select",
+            "value": "warrior",
+            "options": [
+                "warrior",
+                "mage",
+                "rogue",
+                "paladin"
+            ],
+            "required": true
+        },
+        "level": {
+            "type": "number",
+            "value": 1,
+            "min": 1,
+            "max": 100,
+            "required": true
+        },
+        "strength": {
+            "type": "number",
+            "value": 10,
+            "min": 1,
+            "max": 20
+        },
+        "intelligence": {
+            "type": "number",
+            "value": 10,
+            "min": 1,
+            "max": 20
+        },
+        "agility": {
+            "type": "number",
+            "value": 10,
+            "min": 1,
+            "max": 20
+        },
+        "can_use_heavy_armor": {
+            "type": "boolean",
+            "value": false
+        },
+        "can_cast_spells": {
+            "type": "boolean",
+            "value": false
+        },
+        "can_dual_wield": {
+            "type": "boolean",
+            "value": false
+        },
+        "primary_stat": {
+            "type": "string"
+        },
+        "health_points": {
+            "type": "number"
+        },
+        "mana_points": {
+            "type": "number"
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_warrior_abilities",
+            "when": {
+                "==": [
+                    {
+                        "var": "character_class"
+                    },
+                    "warrior"
+                ]
+            },
+            "then": {
+                "set": {
+                    "can_use_heavy_armor": true,
+                    "can_cast_spells": false,
+                    "primary_stat": "strength"
+                },
+                "ui_modify": {
+                    "strength": {
+                        "ui_message": "Primary stat for Warriors",
+                        "ui_class": "highlight"
+                    },
+                    "intelligence": {
+                        "max": 15
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_mage_abilities",
+            "when": {
+                "==": [
+                    {
+                        "var": "character_class"
+                    },
+                    "mage"
+                ]
+            },
+            "then": {
+                "set": {
+                    "can_use_heavy_armor": false,
+                    "can_cast_spells": true,
+                    "primary_stat": "intelligence"
+                },
+                "ui_modify": {
+                    "intelligence": {
+                        "ui_message": "Primary stat for Mages",
+                        "ui_class": "highlight"
+                    },
+                    "strength": {
+                        "max": 12
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_rogue_abilities",
+            "when": {
+                "==": [
+                    {
+                        "var": "character_class"
+                    },
+                    "rogue"
+                ]
+            },
+            "then": {
+                "set": {
+                    "can_use_heavy_armor": false,
+                    "can_dual_wield": true,
+                    "primary_stat": "agility"
+                },
+                "ui_modify": {
+                    "agility": {
+                        "ui_message": "Primary stat for Rogues",
+                        "ui_class": "highlight"
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_paladin_hybrid",
+            "when": {
+                "==": [
+                    {
+                        "var": "character_class"
+                    },
+                    "paladin"
+                ]
+            },
+            "then": {
+                "set": {
+                    "can_use_heavy_armor": true,
+                    "can_cast_spells": true,
+                    "primary_stat": "strength"
+                }
+            }
+        },
+        {
+            "id": "rule_high_level_unlock",
+            "when": {
+                ">=": [
+                    {
+                        "var": "level"
+                    },
+                    50
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "strength": {
+                        "max": 25
+                    },
+                    "intelligence": {
+                        "max": 25
+                    },
+                    "agility": {
+                        "max": 25
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_stat_validation",
+            "when": {
+                ">": [
+                    {
+                        "var": "total_stats"
+                    },
+                    {
+                        "var": "max_stat_points"
+                    }
+                ]
+            },
+            "then": {
+                "error_msg": "You have exceeded your available stat points."
+            }
+        }
+    ],
+    "state_model": {
+        "inputs": [
+            "level",
+            "strength",
+            "intelligence",
+            "agility",
+            "character_class"
+        ],
+        "derived": {
+            "total_stats": {
+                "eval": {
+                    "+": [
+                        {
+                            "+": [
+                                {
+                                    "var": "strength"
+                                },
+                                {
+                                    "var": "intelligence"
+                                }
+                            ]
+                        },
+                        {
+                            "var": "agility"
+                        }
+                    ]
+                }
+            },
+            "max_stat_points": {
+                "eval": {
+                    "+": [
+                        30,
+                        {
+                            "*": [
+                                {
+                                    "var": "level"
+                                },
+                                2
+                            ]
+                        }
+                    ]
+                }
+            },
+            "health_points": {
+                "eval": {
+                    "+": [
+                        100,
+                        {
+                            "*": [
+                                {
+                                    "var": "strength"
+                                },
+                                10
+                            ]
+                        }
+                    ]
+                }
+            },
+            "mana_points": {
+                "eval": {
+                    "if": [
+                        {
+                            "var": "can_cast_spells"
+                        },
+                        {
+                            "+": [
+                                50,
+                                {
+                                    "*": [
+                                        {
+                                            "var": "intelligence"
+                                        },
+                                        15
+                                    ]
+                                }
+                            ]
+                        },
+                        0
+                    ]
+                }
+            }
+        }
+    }
+}

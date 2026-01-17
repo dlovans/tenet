@@ -1,0 +1,109 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "gdpr_breach_report",
+    "version": "2025.01.16",
+    "valid_from": "2025-01-01",
+    "definitions": {
+        "impact_level": {
+            "type": "select",
+            "options": [
+                "Low",
+                "Material",
+                "Severe"
+            ],
+            "value": "Material",
+            "required": true
+        },
+        "breach_date": {
+            "type": "date",
+            "value": "2025-01-15",
+            "required": true
+        },
+        "reporting_deadline": {
+            "type": "string",
+            "required": false
+        },
+        "requires_attestation": {
+            "type": "boolean",
+            "value": false
+        },
+        "officer_assertion": {
+            "type": "attestation",
+            "label": "I confirm this assessment was made with reasonable effort.",
+            "required": false
+        },
+        "annual_revenue": {
+            "type": "number",
+            "required": false
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_72_hour_limit",
+            "law_ref": "GDPR Art. 33(1)",
+            "when": {
+                "==": [
+                    {
+                        "var": "impact_level"
+                    },
+                    "Material"
+                ]
+            },
+            "then": {
+                "set": {
+                    "reporting_deadline": "72h",
+                    "requires_attestation": true
+                },
+                "ui_modify": {
+                    "officer_assertion": {
+                        "visible": true,
+                        "required": true
+                    }
+                },
+                "error_msg": "Material impact requires reporting within 72 hours per GDPR Art. 33."
+            }
+        },
+        {
+            "id": "rule_severe_escalation",
+            "law_ref": "GDPR Art. 34(1)",
+            "when": {
+                "==": [
+                    {
+                        "var": "impact_level"
+                    },
+                    "Severe"
+                ]
+            },
+            "then": {
+                "set": {
+                    "reporting_deadline": "24h",
+                    "requires_attestation": true
+                },
+                "error_msg": "Severe impact requires immediate notification to affected individuals per GDPR Art. 34."
+            }
+        }
+    ],
+    "state_model": {
+        "inputs": [
+            "annual_revenue"
+        ],
+        "derived": {
+            "tax_rate": {
+                "eval": {
+                    "if": [
+                        {
+                            ">": [
+                                {
+                                    "var": "annual_revenue"
+                                },
+                                1000000
+                            ]
+                        },
+                        0.25,
+                        0.20
+                    ]
+                }
+            }
+        }
+    }
+}

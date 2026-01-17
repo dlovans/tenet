@@ -1,0 +1,218 @@
+{
+    "protocol": "Tenet_v1.0",
+    "schema_id": "survey_conditional",
+    "version": "2025.01.16",
+    "definitions": {
+        "age_group": {
+            "type": "select",
+            "options": [
+                "under_18",
+                "18_34",
+                "35_54",
+                "55_plus"
+            ],
+            "required": true,
+            "label": "What is your age group?"
+        },
+        "has_children": {
+            "type": "boolean",
+            "value": false,
+            "label": "Do you have children?"
+        },
+        "children_count": {
+            "type": "number",
+            "min": 0,
+            "max": 10,
+            "label": "How many children do you have?"
+        },
+        "employment_status": {
+            "type": "select",
+            "options": [
+                "employed",
+                "self_employed",
+                "student",
+                "retired",
+                "unemployed"
+            ],
+            "required": true,
+            "label": "What is your employment status?"
+        },
+        "company_size": {
+            "type": "select",
+            "options": [
+                "1_10",
+                "11_50",
+                "51_200",
+                "200_plus"
+            ],
+            "label": "How large is your company?"
+        },
+        "retirement_year": {
+            "type": "number",
+            "min": 1950,
+            "max": 2025,
+            "label": "What year did you retire?"
+        },
+        "student_level": {
+            "type": "select",
+            "options": [
+                "high_school",
+                "undergraduate",
+                "graduate",
+                "phd"
+            ],
+            "label": "What is your education level?"
+        },
+        "consent_marketing": {
+            "type": "attestation",
+            "label": "I agree to receive marketing communications.",
+            "required": false
+        },
+        "consent_data": {
+            "type": "attestation",
+            "label": "I consent to data processing for survey analysis.",
+            "required": true
+        },
+        "survey_complete": {
+            "type": "boolean",
+            "value": false
+        }
+    },
+    "logic_tree": [
+        {
+            "id": "rule_show_children_count",
+            "when": {
+                "==": [
+                    {
+                        "var": "has_children"
+                    },
+                    true
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "children_count": {
+                        "visible": true,
+                        "required": true
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_hide_children_count",
+            "when": {
+                "==": [
+                    {
+                        "var": "has_children"
+                    },
+                    false
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "children_count": {
+                        "visible": false,
+                        "required": false
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_employed_questions",
+            "when": {
+                "in": [
+                    {
+                        "var": "employment_status"
+                    },
+                    [
+                        "employed",
+                        "self_employed"
+                    ]
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "company_size": {
+                        "visible": true,
+                        "required": true
+                    },
+                    "retirement_year": {
+                        "visible": false
+                    },
+                    "student_level": {
+                        "visible": false
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_student_questions",
+            "when": {
+                "==": [
+                    {
+                        "var": "employment_status"
+                    },
+                    "student"
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "student_level": {
+                        "visible": true,
+                        "required": true
+                    },
+                    "company_size": {
+                        "visible": false
+                    },
+                    "retirement_year": {
+                        "visible": false
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_retired_questions",
+            "when": {
+                "==": [
+                    {
+                        "var": "employment_status"
+                    },
+                    "retired"
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "retirement_year": {
+                        "visible": true,
+                        "required": true
+                    },
+                    "company_size": {
+                        "visible": false
+                    },
+                    "student_level": {
+                        "visible": false
+                    }
+                }
+            }
+        },
+        {
+            "id": "rule_minor_consent",
+            "when": {
+                "==": [
+                    {
+                        "var": "age_group"
+                    },
+                    "under_18"
+                ]
+            },
+            "then": {
+                "ui_modify": {
+                    "consent_marketing": {
+                        "visible": false
+                    }
+                },
+                "error_msg": "Parental consent may be required for participants under 18."
+            }
+        }
+    ]
+}
