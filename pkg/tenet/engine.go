@@ -55,22 +55,20 @@ func Run(jsonText string, date time.Time) (string, error) {
 	return engine.marshal()
 }
 
-// Verify checks that newJson is a valid derivation of oldJson.
-// It re-runs the logic on oldJson with the effective date from newJson
-// and compares the resulting values.
+// Verify checks that a completed document (newJson) was correctly derived from a base schema.
+// It simulates the user's journey by iteratively copying visible field values and re-running.
 //
-// This is the "Auditor" - it proves the transformation was legal.
-func Verify(newJson, oldJson string) (bool, error) {
+// This is the "Auditor" - it proves the transformation was legal by replaying the journey.
+func Verify(newJson, baseSchemaJson string) (bool, error) {
+	const maxIterations = 100
+
 	// Parse both documents
-	var newSchema, oldSchema Schema
+	var newSchema Schema
 	if err := json.Unmarshal([]byte(newJson), &newSchema); err != nil {
 		return false, fmt.Errorf("unmarshal newJson: %w", err)
 	}
-	if err := json.Unmarshal([]byte(oldJson), &oldSchema); err != nil {
-		return false, fmt.Errorf("unmarshal oldJson: %w", err)
-	}
 
-	// Extract effective date from newJson (use ValidFrom or current time)
+	// Extract effective date from newJson
 	effectiveDate := time.Now()
 	if newSchema.ValidFrom != "" {
 		if parsed, ok := parseDate(newSchema.ValidFrom); ok {
@@ -78,35 +76,151 @@ func Verify(newJson, oldJson string) (bool, error) {
 		}
 	}
 
-	// Re-run the logic on oldJson
-	resultJson, err := Run(oldJson, effectiveDate)
-	if err != nil {
-		return false, fmt.Errorf("replay failed: %w", err)
+	// Start with base schema
+	currentJson := baseSchemaJson
+	previousVisibleCount := -1
+
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		// Parse current state
+		var currentSchema Schema
+		if err := json.Unmarshal([]byte(currentJson), &currentSchema); err != nil {
+			return false, fmt.Errorf("unmarshal current (iteration %d): %w", iteration, err)
+		}
+
+		// Count visible editable fields before copying
+		visibleEditable := getVisibleEditableFields(&currentSchema)
+
+		// Copy values from newJson for visible, editable fields
+		for fieldId := range visibleEditable {
+			if newDef, ok := newSchema.Definitions[fieldId]; ok && newDef != nil {
+				if currentDef, ok := currentSchema.Definitions[fieldId]; ok && currentDef != nil {
+					currentDef.Value = newDef.Value
+				}
+			}
+		}
+
+		// Copy attestation states for visible attestations
+		for attId, currentAtt := range currentSchema.Attestations {
+			if currentAtt == nil {
+				continue
+			}
+			if newAtt, ok := newSchema.Attestations[attId]; ok && newAtt != nil {
+				currentAtt.Signed = newAtt.Signed
+				currentAtt.Evidence = newAtt.Evidence
+			}
+		}
+
+		// Run the schema
+		modifiedJson, err := json.Marshal(currentSchema)
+		if err != nil {
+			return false, fmt.Errorf("marshal (iteration %d): %w", iteration, err)
+		}
+
+		resultJson, err := Run(string(modifiedJson), effectiveDate)
+		if err != nil {
+			return false, fmt.Errorf("run failed (iteration %d): %w", iteration, err)
+		}
+
+		// Parse result
+		var resultSchema Schema
+		if err := json.Unmarshal([]byte(resultJson), &resultSchema); err != nil {
+			return false, fmt.Errorf("unmarshal result (iteration %d): %w", iteration, err)
+		}
+
+		// Count visible fields after run
+		currentVisibleCount := countVisibleFields(&resultSchema)
+
+		// Check for convergence
+		if currentVisibleCount == previousVisibleCount {
+			// Converged - now validate the final state
+			return validateFinalState(&newSchema, &resultSchema)
+		}
+
+		previousVisibleCount = currentVisibleCount
+		currentJson = resultJson
 	}
 
-	// Parse the result and compare definition values
-	var resultSchema Schema
-	if err := json.Unmarshal([]byte(resultJson), &resultSchema); err != nil {
-		return false, fmt.Errorf("unmarshal result: %w", err)
+	return false, fmt.Errorf("verification did not converge after %d iterations", maxIterations)
+}
+
+// getVisibleEditableFields returns field IDs that are visible and not readonly
+func getVisibleEditableFields(schema *Schema) map[string]bool {
+	result := make(map[string]bool)
+	for id, def := range schema.Definitions {
+		if def != nil && def.Visible && !def.Readonly {
+			result[id] = true
+		}
+	}
+	return result
+}
+
+// countVisibleFields returns the number of visible fields
+func countVisibleFields(schema *Schema) int {
+	count := 0
+	for _, def := range schema.Definitions {
+		if def != nil && def.Visible {
+			count++
+		}
+	}
+	return count
+}
+
+// validateFinalState compares computed values and attestation fulfillment
+func validateFinalState(newSchema, resultSchema *Schema) (bool, error) {
+	engine := &Engine{}
+
+	// Check for unknown/injected fields in newSchema that don't exist in result
+	for id := range newSchema.Definitions {
+		if _, existsInResult := resultSchema.Definitions[id]; !existsInResult {
+			return false, fmt.Errorf("unknown field '%s' not in schema", id)
+		}
 	}
 
-	// Compare all definition values
-	for id, newDef := range newSchema.Definitions {
-		if newDef == nil {
+	// Compare computed (readonly) values
+	for id, resultDef := range resultSchema.Definitions {
+		if resultDef == nil || !resultDef.Readonly {
 			continue
 		}
 
-		resultDef, ok := resultSchema.Definitions[id]
+		newDef, ok := newSchema.Definitions[id]
 		if !ok {
-			return false, fmt.Errorf("definition '%s' missing in replay", id)
+			return false, fmt.Errorf("computed field '%s' missing in submitted document", id)
 		}
 
-		// Compare values using the same equality logic
-		engine := &Engine{}
 		if !engine.compareEqual(newDef.Value, resultDef.Value) {
-			return false, fmt.Errorf("definition '%s' value mismatch: got %v, expected %v",
+			return false, fmt.Errorf("computed field '%s' mismatch: claimed %v, expected %v",
 				id, newDef.Value, resultDef.Value)
 		}
+	}
+
+	// Verify attestations are fulfilled
+	for id, resultAtt := range resultSchema.Attestations {
+		if resultAtt == nil {
+			continue
+		}
+
+		newAtt, ok := newSchema.Attestations[id]
+		if !ok {
+			continue // Attestation not required in result
+		}
+
+		if resultAtt.Required {
+			if !newAtt.Signed {
+				return false, fmt.Errorf("required attestation '%s' not signed", id)
+			}
+			if newAtt.Evidence == nil || newAtt.Evidence.ProviderAuditID == "" {
+				return false, fmt.Errorf("attestation '%s' missing evidence", id)
+			}
+			if newAtt.Evidence.Timestamp == "" {
+				return false, fmt.Errorf("attestation '%s' missing timestamp", id)
+			}
+		}
+	}
+
+	// Verify status matches
+	if newSchema.Status != resultSchema.Status {
+		return false, fmt.Errorf("status mismatch: claimed %s, expected %s",
+			newSchema.Status, resultSchema.Status)
 	}
 
 	return true, nil
