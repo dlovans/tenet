@@ -1,0 +1,29 @@
+# Binaries
+tenet
+*.wasm
+*.exe
+
+# Go
+*.test
+coverage.out
+
+# Node.js / npm
+js/node_modules/
+js/dist/
+js/.npm
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test output (generated)
+pkg/tenet/testdata/output/
+
+# Environment
+.env
+.env.local
