@@ -6,15 +6,17 @@ import (
 
 // Engine holds state during execution of a schema.
 type Engine struct {
-	schema *Schema
-	errors []ValidationError
+	schema    *Schema
+	errors    []ValidationError
+	fieldsSet map[string]string // tracks which fields were set by which rule (cycle detection)
 }
 
 // NewEngine creates an engine for the given schema.
 func NewEngine(schema *Schema) *Engine {
 	return &Engine{
-		schema: schema,
-		errors: make([]ValidationError, 0),
+		schema:    schema,
+		errors:    make([]ValidationError, 0),
+		fieldsSet: make(map[string]string),
 	}
 }
 

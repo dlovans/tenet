@@ -58,9 +58,14 @@ func Run(jsonText string, date time.Time) (string, error) {
 // Verify checks that a completed document (newJson) was correctly derived from a base schema.
 // It simulates the user's journey by iteratively copying visible field values and re-running.
 //
+// Optional maxIterations parameter (default: 100) limits the replay iterations.
+//
 // This is the "Auditor" - it proves the transformation was legal by replaying the journey.
-func Verify(newJson, baseSchemaJson string) (bool, error) {
-	const maxIterations = 100
+func Verify(newJson, baseSchemaJson string, maxIter ...int) (bool, error) {
+	maxIterations := 100
+	if len(maxIter) > 0 && maxIter[0] > 0 {
+		maxIterations = maxIter[0]
+	}
 
 	// Parse both documents
 	var newSchema Schema
@@ -252,7 +257,7 @@ func (e *Engine) applyAction(action *Action, ruleID, lawRef string) {
 		for key, value := range action.Set {
 			// Resolve the value in case it's an expression
 			resolvedValue := e.resolve(value)
-			e.setDefinitionValue(key, resolvedValue)
+			e.setDefinitionValue(key, resolvedValue, ruleID)
 		}
 	}
 
@@ -270,7 +275,16 @@ func (e *Engine) applyAction(action *Action, ruleID, lawRef string) {
 }
 
 // setDefinitionValue updates or creates a definition value.
-func (e *Engine) setDefinitionValue(key string, value any) {
+// Tracks which rule set each field to detect potential cycles.
+func (e *Engine) setDefinitionValue(key string, value any, ruleID string) {
+	// Cycle detection: check if this field was already set by a different rule
+	if prevRule, alreadySet := e.fieldsSet[key]; alreadySet && prevRule != ruleID {
+		e.addError(key, ruleID, fmt.Sprintf(
+			"potential cycle: field '%s' set by rule '%s' and again by rule '%s'",
+			key, prevRule, ruleID), "")
+	}
+	e.fieldsSet[key] = ruleID
+
 	def, ok := e.schema.Definitions[key]
 	if !ok {
 		// Create new definition if it doesn't exist

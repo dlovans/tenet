@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"tenet/pkg/lint"
 	"tenet/pkg/tenet"
 )
 
@@ -21,6 +22,9 @@ func main() {
 	verifyCmd := flag.NewFlagSet("verify", flag.ExitOnError)
 	verifyNew := verifyCmd.String("new", "", "New JSON file to verify")
 	verifyOld := verifyCmd.String("old", "", "Original JSON file")
+
+	lintCmd := flag.NewFlagSet("lint", flag.ExitOnError)
+	lintFile := lintCmd.String("file", "", "JSON schema file to lint")
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -36,6 +40,10 @@ func main() {
 		verifyCmd.Parse(os.Args[2:])
 		handleVerify(*verifyNew, *verifyOld)
 
+	case "lint":
+		lintCmd.Parse(os.Args[2:])
+		handleLint(*lintFile)
+
 	default:
 		printUsage()
 		os.Exit(1)
@@ -48,10 +56,12 @@ func printUsage() {
 	fmt.Println("Usage:")
 	fmt.Println("  tenet run [-date YYYY-MM-DD] [-file input.json]")
 	fmt.Println("  tenet verify -new new.json -old old.json")
+	fmt.Println("  tenet lint -file schema.json")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  tenet run -date 2025-06-15 -file schema.json")
 	fmt.Println("  cat schema.json | tenet run -date 2025-06-15")
+	fmt.Println("  tenet lint -file schema.json")
 	fmt.Println("  tenet verify -new updated.json -old original.json")
 }
 
@@ -123,6 +133,53 @@ func handleVerify(newPath, oldPath string) {
 		fmt.Println("✓ Document verified: transformation is legal")
 	} else {
 		fmt.Println("✗ Document verification failed")
+		os.Exit(1)
+	}
+}
+
+func handleLint(filePath string) {
+	var input []byte
+	var err error
+
+	if filePath != "" {
+		input, err = os.ReadFile(filePath)
+	} else {
+		input, err = io.ReadAll(os.Stdin)
+	}
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading input: %v\n", err)
+		os.Exit(1)
+	}
+
+	result, err := lint.Run(string(input))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Lint error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(result.Issues) == 0 {
+		fmt.Println("✓ No issues found")
+		return
+	}
+
+	// Print issues
+	for _, issue := range result.Issues {
+		icon := "⚠"
+		if issue.Severity == "error" {
+			icon = "✗"
+		}
+		location := ""
+		if issue.Field != "" {
+			location = fmt.Sprintf(" [field: %s]", issue.Field)
+		}
+		if issue.Rule != "" {
+			location += fmt.Sprintf(" [rule: %s]", issue.Rule)
+		}
+		fmt.Printf("%s %s%s: %s\n", icon, issue.Severity, location, issue.Message)
+	}
+
+	if !result.Valid {
 		os.Exit(1)
 	}
 }

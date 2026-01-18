@@ -12,6 +12,8 @@
 - **Derived State** — Computed values using JSON-logic expressions (marked `readonly`)
 - **Constraint Validation** — Min/max bounds, string lengths, required fields
 - **Attestation Enforcement** — Documents are INCOMPLETE until confirmed
+- **Cycle Detection** — Runtime warning when multiple rules set the same field
+- **Static Linter** — Catch undefined variables and potential issues before execution
 - **Error Accumulation** — Collect all errors (non-blocking)
 - **WASM Support** — Runs in browsers for reactive UIs
 
@@ -26,6 +28,9 @@ go build -o tenet ./cmd/tenet
 
 # Run a schema
 ./tenet run -date 2025-01-16 -file schema.json
+
+# Lint a schema (static analysis)
+./tenet lint -file schema.json
 ```
 
 ## Minimal Example
