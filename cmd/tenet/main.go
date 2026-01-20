@@ -20,8 +20,8 @@ func main() {
 	runFile := runCmd.String("file", "", "Input JSON file (or use stdin)")
 
 	verifyCmd := flag.NewFlagSet("verify", flag.ExitOnError)
-	verifyNew := verifyCmd.String("new", "", "New JSON file to verify")
-	verifyOld := verifyCmd.String("old", "", "Original JSON file")
+	verifyNew := verifyCmd.String("new", "", "Completed document to verify")
+	verifyBase := verifyCmd.String("base", "", "Original base schema")
 
 	lintCmd := flag.NewFlagSet("lint", flag.ExitOnError)
 	lintFile := lintCmd.String("file", "", "JSON schema file to lint")
@@ -38,7 +38,7 @@ func main() {
 
 	case "verify":
 		verifyCmd.Parse(os.Args[2:])
-		handleVerify(*verifyNew, *verifyOld)
+		handleVerify(*verifyNew, *verifyBase)
 
 	case "lint":
 		lintCmd.Parse(os.Args[2:])
@@ -55,7 +55,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  tenet run [-date YYYY-MM-DD] [-file input.json]")
-	fmt.Println("  tenet verify -new new.json -old old.json")
+	fmt.Println("  tenet verify -new completed.json -base schema.json")
 	fmt.Println("  tenet lint -file schema.json")
 	fmt.Println()
 	fmt.Println("Examples:")
@@ -105,9 +105,9 @@ func handleRun(dateStr, filePath string) {
 	fmt.Println(result)
 }
 
-func handleVerify(newPath, oldPath string) {
-	if newPath == "" || oldPath == "" {
-		fmt.Fprintln(os.Stderr, "Error: Both -new and -old flags are required")
+func handleVerify(newPath, basePath string) {
+	if newPath == "" || basePath == "" {
+		fmt.Fprintln(os.Stderr, "Error: Both -new and -base flags are required")
 		os.Exit(1)
 	}
 
@@ -117,13 +117,13 @@ func handleVerify(newPath, oldPath string) {
 		os.Exit(1)
 	}
 
-	oldJson, err := os.ReadFile(oldPath)
+	baseJson, err := os.ReadFile(basePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error reading old file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error reading base schema: %v\n", err)
 		os.Exit(1)
 	}
 
-	valid, err := tenet.Verify(string(newJson), string(oldJson))
+	valid, err := tenet.Verify(string(newJson), string(baseJson))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Verification failed: %v\n", err)
 		os.Exit(1)

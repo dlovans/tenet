@@ -1,0 +1,316 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "$id": "https://tenet.dev/schema/v1.json",
+    "title": "Tenet Schema",
+    "description": "A Tenet VM schema for declarative logic, validation, and computed state.",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "JSON Schema URL for IDE validation",
+            "const": "https://tenet.dev/schema/v1.json"
+        },
+        "protocol": {
+            "type": "string",
+            "description": "Protocol identifier",
+            "pattern": "^Tenet_v[0-9]+\\.[0-9]+$",
+            "examples": [
+                "Tenet_v1.0"
+            ]
+        },
+        "schema_id": {
+            "type": "string",
+            "description": "Unique identifier for this schema"
+        },
+        "version": {
+            "type": "string",
+            "description": "Schema version"
+        },
+        "valid_from": {
+            "type": "string",
+            "format": "date",
+            "description": "Date when this schema becomes effective (ISO 8601)"
+        },
+        "definitions": {
+            "type": "object",
+            "description": "Field definitions",
+            "additionalProperties": {
+                "$ref": "#/$defs/definition"
+            }
+        },
+        "logic_tree": {
+            "type": "array",
+            "description": "Reactive rules that fire when conditions match",
+            "items": {
+                "$ref": "#/$defs/rule"
+            }
+        },
+        "state_model": {
+            "type": "object",
+            "description": "Derived state configuration",
+            "properties": {
+                "inputs": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Fields that trigger recomputation"
+                },
+                "derived": {
+                    "type": "object",
+                    "description": "Computed fields",
+                    "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                            "eval": {
+                                "description": "JSON-logic expression to compute the value"
+                            }
+                        },
+                        "required": [
+                            "eval"
+                        ]
+                    }
+                }
+            }
+        },
+        "temporal_map": {
+            "type": "array",
+            "description": "Version branching based on effective dates",
+            "items": {
+                "$ref": "#/$defs/temporalBranch"
+            }
+        },
+        "attestations": {
+            "type": "object",
+            "description": "Signature requirements",
+            "additionalProperties": {
+                "$ref": "#/$defs/attestation"
+            }
+        }
+    },
+    "required": [
+        "definitions"
+    ],
+    "$defs": {
+        "definition": {
+            "type": "object",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "select",
+                        "date",
+                        "attestation",
+                        "currency"
+                    ],
+                    "description": "Field data type"
+                },
+                "value": {
+                    "description": "Current value"
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "description": "Valid options for select type"
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Human-readable label"
+                },
+                "required": {
+                    "type": "boolean",
+                    "description": "Whether field must have a value for READY status"
+                },
+                "visible": {
+                    "type": "boolean",
+                    "description": "Whether field is visible in UI"
+                },
+                "readonly": {
+                    "type": "boolean",
+                    "description": "Whether field is computed (non-editable)"
+                },
+                "min": {
+                    "type": "number",
+                    "description": "Minimum value (for number type)"
+                },
+                "max": {
+                    "type": "number",
+                    "description": "Maximum value (for number type)"
+                },
+                "min_length": {
+                    "type": "integer",
+                    "description": "Minimum string length"
+                },
+                "max_length": {
+                    "type": "integer",
+                    "description": "Maximum string length"
+                },
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex pattern for validation"
+                },
+                "step": {
+                    "type": "number",
+                    "description": "Step increment for UI (e.g., 0.01 for currency)"
+                },
+                "ui_class": {
+                    "type": "string",
+                    "description": "CSS class hint for styling"
+                },
+                "ui_message": {
+                    "type": "string",
+                    "description": "Inline help text or warning"
+                }
+            },
+            "required": [
+                "type"
+            ]
+        },
+        "rule": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string",
+                    "description": "Unique rule identifier"
+                },
+                "law_ref": {
+                    "type": "string",
+                    "description": "Legal citation (e.g., 'OSHA Section 1910.12')"
+                },
+                "when": {
+                    "description": "JSON-logic condition"
+                },
+                "then": {
+                    "$ref": "#/$defs/action"
+                },
+                "disabled": {
+                    "type": "boolean",
+                    "description": "Skip this rule during evaluation"
+                },
+                "logic_version": {
+                    "type": "string",
+                    "description": "Which temporal branch this rule belongs to"
+                }
+            },
+            "required": [
+                "id",
+                "when",
+                "then"
+            ]
+        },
+        "action": {
+            "type": "object",
+            "properties": {
+                "set": {
+                    "type": "object",
+                    "description": "Field values to set"
+                },
+                "ui_modify": {
+                    "type": "object",
+                    "description": "UI property modifications"
+                },
+                "error_msg": {
+                    "type": "string",
+                    "description": "Validation error message"
+                }
+            }
+        },
+        "temporalBranch": {
+            "type": "object",
+            "properties": {
+                "valid_range": {
+                    "type": "array",
+                    "items": [
+                        {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "format": "date"
+                        },
+                        {
+                            "type": [
+                                "string",
+                                "null"
+                            ],
+                            "format": "date"
+                        }
+                    ],
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[start, end] date range (null = open-ended)"
+                },
+                "logic_version": {
+                    "type": "string",
+                    "description": "Version identifier"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "ACTIVE",
+                        "ARCHIVED"
+                    ]
+                }
+            },
+            "required": [
+                "logic_version"
+            ]
+        },
+        "attestation": {
+            "type": "object",
+            "properties": {
+                "law_ref": {
+                    "type": "string",
+                    "description": "Legal citation"
+                },
+                "statement": {
+                    "type": "string",
+                    "description": "What the signer is attesting to"
+                },
+                "required_role": {
+                    "type": "string",
+                    "description": "Role required to sign"
+                },
+                "provider": {
+                    "type": "string",
+                    "description": "Signing provider (e.g., 'DocuSign', 'Manual')"
+                },
+                "required": {
+                    "type": "boolean",
+                    "description": "Whether signature is required for READY status"
+                },
+                "signed": {
+                    "type": "boolean",
+                    "description": "Whether attestation has been signed"
+                },
+                "evidence": {
+                    "type": "object",
+                    "properties": {
+                        "provider_audit_id": {
+                            "type": "string"
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "format": "date-time"
+                        },
+                        "signer_id": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "on_sign": {
+                    "$ref": "#/$defs/action",
+                    "description": "Actions to execute when attestation is signed"
+                }
+            },
+            "required": [
+                "statement"
+            ]
+        }
+    }
+}

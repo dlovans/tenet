@@ -17,8 +17,8 @@
         "wasm"
     ],
     "scripts": {
-        "build:wasm": "cd .. && GOOS=js GOARCH=wasm go build -o js/wasm/tenet.wasm ./wasm",
-        "build:js": "tsc && node scripts/bundle.js",
+        "build:wasm": "cd .. && GOOS=js GOARCH=wasm go build -o js/wasm/tenet.wasm ./cmd/wasm",
+        "build:js": "tsc",
         "build": "npm run build:wasm && npm run build:js",
         "test": "node --test dist/*.test.js",
         "prepublishOnly": "npm run build"
@@ -31,13 +31,14 @@
         "form",
         "wasm",
         "compliance",
-        "temporal"
+        "temporal",
+        "linter"
     ],
-    "author": "",
+    "author": "Dlovan Sharif",
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/yourusername/tenet"
+        "url": "https://github.com/tenet-vm/tenet"
     },
     "engines": {
         "node": ">=18.0.0"

@@ -1,76 +1,104 @@
 # Tenet
 
-**Law as Code** — A declarative logic VM for standardizing legal and regulatory requirements as executable JSON schemas.
+A declarative logic VM for JSON. Define rules, compute values, validate constraints — all in pure JSON.
 
 [![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+## What It Does
+
+Tenet processes JSON documents through a rules engine:
+
+```
+Your JSON Schema → [Tenet VM] → Validated JSON with computed values
+```
+
+Use it for **smart forms**, **compliance checks**, **game logic**, **workflow automation**, or anything that needs deterministic rule evaluation.
+
 ## Features
 
-- **Reactive Logic** — If-then rules that fire when conditions change
-- **Temporal Routing** — Version logic based on effective dates
-- **Derived State** — Computed values using JSON-logic expressions (marked `readonly`)
-- **Constraint Validation** — Min/max bounds, string lengths, required fields
-- **Attestation Enforcement** — Documents are INCOMPLETE until confirmed
-- **Cycle Detection** — Runtime warning when multiple rules set the same field
-- **Static Linter** — Catch undefined variables and potential issues before execution
-- **Error Accumulation** — Collect all errors (non-blocking)
-- **WASM Support** — Runs in browsers for reactive UIs
+- **Reactive Rules** — If-then logic that fires when conditions match
+- **Computed Fields** — Derived values calculated automatically
+- **Constraint Validation** — Min/max, required fields, patterns
+- **Dynamic Visibility** — Show/hide fields based on state
+- **Temporal Routing** — Version rules by effective date
+- **Attestation Tracking** — Validate that signatures were collected
+- **Static Linter** — Catch errors before execution
+- **WASM Support** — Runs in browsers
 
 ## Quick Start
 
 ```bash
-# Install
-go get github.com/yourusername/tenet
-
 # Build CLI
 go build -o tenet ./cmd/tenet
 
 # Run a schema
-./tenet run -date 2025-01-16 -file schema.json
+./tenet run -file schema.json
 
-# Lint a schema (static analysis)
+# Lint (static analysis)
 ./tenet lint -file schema.json
 ```
 
-## Minimal Example
+## Example
 
 ```json
 {
   "definitions": {
-    "amount": {"type": "number", "value": 500, "min": 0, "max": 10000}
+    "income": {"type": "number", "value": 45000, "required": true},
+    "tax_bracket": {"type": "string", "readonly": true}
   },
   "logic_tree": [
     {
-      "id": "high_amount_warning",
-      "when": {">": [{"var": "amount"}, 5000]},
-      "then": {"error_msg": "Amount exceeds recommended limit."}
+      "id": "low_income",
+      "when": {"<": [{"var": "income"}, 50000]},
+      "then": {"set": {"tax_bracket": "low"}}
+    },
+    {
+      "id": "high_income", 
+      "when": {">=": [{"var": "income"}, 50000]},
+      "then": {"set": {"tax_bracket": "high"}}
     }
   ]
 }
 ```
 
+Output: `tax_bracket` is computed as `"low"`.
+
 ## Documentation
 
-- **[Full Documentation](docs/README.md)** — Schema reference, operators, API
-- **[Contributing](CONTRIBUTING.md)** — Development setup, code style
+- **[Complete Specification](SPECIFICATION.md)** — Full schema reference
+- **[API Reference](docs/05-api-reference.md)** — Go, JavaScript, CLI
+- **[Examples](docs/04-examples.md)** — Real-world schemas
 
 ## API
 
 ### Go
 
 ```go
-import "github.com/yourusername/tenet"
+import "github.com/tenet-vm/tenet/pkg/tenet"
 
 result, err := tenet.Run(jsonString, time.Now())
-valid, err := tenet.Verify(newJSON, oldJSON)
+valid, err := tenet.Verify(completedDoc, baseSchema)
 ```
 
-### JavaScript (WASM)
+### JavaScript
 
 ```javascript
-const result = TenetRun(jsonString, "2025-01-16");
-const verification = TenetVerify(newJSON, oldJSON);
+import { init, run, verify, lint } from '@tenet-vm/tenet';
+
+await init('./tenet.wasm');
+const result = run(schema);
+
+// Lint works without WASM
+const issues = lint(schema);
+```
+
+### CLI
+
+```bash
+tenet run -file schema.json -date 2026-01-20
+tenet verify -new completed.json -base schema.json
+tenet lint -file schema.json
 ```
 
 ## Document Status
@@ -79,7 +107,7 @@ const verification = TenetVerify(newJSON, oldJSON);
 |--------|---------|
 | `READY` | All validations pass |
 | `INCOMPLETE` | Missing required fields or attestations |
-| `INVALID` | Type errors or constraint violations |
+| `INVALID` | Constraint violations |
 
 ## License
 
