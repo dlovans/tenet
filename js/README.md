@@ -1,11 +1,11 @@
-# @tenet/core
+# @dlovans/tenet-core
 
 Declarative logic VM for JSON schemas. Reactive validation, temporal routing, and computed state.
 
 ## Installation
 
 ```bash
-npm install @tenet/core
+npm install @dlovans/tenet-core
 ```
 
 ## Usage
@@ -13,9 +13,9 @@ npm install @tenet/core
 ### Browser
 
 ```html
-<script src="https://unpkg.com/@tenet/core/wasm/wasm_exec.js"></script>
+<script src="https://unpkg.com/@dlovans/tenet-core/wasm/wasm_exec.js"></script>
 <script type="module">
-import { init, run } from '@tenet/core';
+import { init, run } from '@dlovans/tenet-core';
 
 await init('/path/to/tenet.wasm');
 
@@ -40,10 +40,10 @@ console.log(result);
 ### Node.js
 
 ```javascript
-import { init, run, verify } from '@tenet/core';
+import { init, run, verify } from '@dlovans/tenet-core';
 
 // Initialize WASM
-await init('./node_modules/@tenet/core/wasm/tenet.wasm');
+await init('./node_modules/@dlovans/tenet-core/wasm/tenet.wasm');
 
 // Run schema logic
 const result = run(schema, new Date());
@@ -75,7 +75,7 @@ Verify that a transformation is legal by replaying the logic.
 Static analysis - find issues without executing the schema.
 
 ```javascript
-import { lint } from '@tenet/core';
+import { lint } from '@dlovans/tenet-core';
 
 const result = lint(schema);
 // No init() needed - pure TypeScript!

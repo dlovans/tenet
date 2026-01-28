@@ -1,15 +1,18 @@
 {
-    "name": "@tenet/core",
-    "version": "0.1.0",
+    "name": "@dlovans/tenet-core",
+    "version": "0.1.1",
+    "type": "module",
     "description": "Declarative logic VM for JSON schemas - reactive validation, temporal routing, and computed state",
     "main": "dist/index.js",
-    "module": "dist/index.mjs",
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
-            "import": "./dist/index.mjs",
-            "require": "./dist/index.js",
+            "import": "./dist/index.js",
             "types": "./dist/index.d.ts"
+        },
+        "./lint": {
+            "import": "./dist/lint.js",
+            "types": "./dist/lint.d.ts"
         }
     },
     "files": [
@@ -38,7 +41,11 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/tenet-vm/tenet"
+        "url": "https://github.com/dlovans/tenet"
+    },
+    "homepage": "https://github.com/dlovans/tenet#readme",
+    "bugs": {
+        "url": "https://github.com/dlovans/tenet/issues"
     },
     "engines": {
         "node": ">=18.0.0"
