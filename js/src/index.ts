@@ -143,9 +143,29 @@ async function loadWasm(wasmPath: string): Promise<void> {
 
     if (isBrowser) {
         // Browser environment
+        // Resolve paths relative to this module
+        const moduleUrl = new URL(import.meta.url);
+        const baseUrl = moduleUrl.href.substring(0, moduleUrl.href.lastIndexOf('/'));
+
+        // Load wasm_exec.js if Go is not defined
+        if (typeof Go === 'undefined') {
+            await new Promise<void>((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = `${baseUrl}/../wasm/wasm_exec.js`;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error('Failed to load wasm_exec.js'));
+                document.head.appendChild(script);
+            });
+        }
+
+        // Auto-resolve WASM path if default
+        const resolvedWasmPath = wasmPath === './tenet.wasm'
+            ? `${baseUrl}/../wasm/tenet.wasm`
+            : wasmPath;
+
         const go = new Go();
         const result = await WebAssembly.instantiateStreaming(
-            fetch(wasmPath),
+            fetch(resolvedWasmPath),
             go.importObject
         );
         go.run(result.instance);
