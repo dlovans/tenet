@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"tenet/pkg/lint"
-	"tenet/pkg/tenet"
+	"github.com/dlovans/tenet/pkg/lint"
+	"github.com/dlovans/tenet/pkg/tenet"
 )
 
 func main() {
