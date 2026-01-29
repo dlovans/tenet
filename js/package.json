@@ -1,6 +1,6 @@
 {
     "name": "@dlovans/tenet-core",
-    "version": "0.1.4",
+    "version": "0.2.0",
     "type": "module",
     "description": "Declarative logic VM for JSON schemas - reactive validation, temporal routing, and computed state",
     "main": "dist/index.js",
@@ -16,13 +16,10 @@
         }
     },
     "files": [
-        "dist",
-        "wasm"
+        "dist"
     ],
     "scripts": {
-        "build:wasm": "cd .. && GOOS=js GOARCH=wasm go build -o js/wasm/tenet.wasm ./cmd/wasm",
-        "build:js": "tsc",
-        "build": "npm run build:wasm && npm run build:js",
+        "build": "tsc",
         "test": "node --test dist/*.test.js",
         "prepublishOnly": "npm run build"
     },
@@ -32,7 +29,6 @@
         "reactive",
         "schema",
         "form",
-        "wasm",
         "compliance",
         "temporal",
         "linter"
