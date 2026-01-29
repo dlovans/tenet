@@ -5,10 +5,6 @@
  * Works in both browser and Node.js environments with no WASM dependencies.
  */
 
-// Re-export lint functions (pure TypeScript)
-export { lint, isTenetSchema, SCHEMA_URL } from './lint.js';
-export type { LintIssue, LintResult } from './lint.js';
-
 // Type definitions
 export interface TenetResult {
     result?: TenetSchema;

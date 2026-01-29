@@ -13,8 +13,15 @@ func (e *Engine) validateDefinitions() {
 		}
 
 		// Check required fields
-		if def.Required && def.Value == nil {
-			e.addError(id, "", fmt.Sprintf("Required field '%s' is missing", id), "")
+		if def.Required {
+			if def.Value == nil {
+				e.addError(id, "", fmt.Sprintf("Required field '%s' is missing", id), "")
+			} else if def.Type == "string" || def.Type == "select" {
+				// Empty string is also considered "missing" for required string/select fields
+				if strVal, ok := def.Value.(string); ok && strVal == "" {
+					e.addError(id, "", fmt.Sprintf("Required field '%s' is missing", id), "")
+				}
+			}
 		}
 
 		// Validate type if value is present

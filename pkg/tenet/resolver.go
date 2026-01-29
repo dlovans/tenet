@@ -1,6 +1,7 @@
 package tenet
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -68,16 +69,7 @@ func (e *Engine) getVar(path string) any {
 
 	parts := strings.Split(path, ".")
 
-	// First, check definitions
-	if def, ok := e.schema.Definitions[parts[0]]; ok {
-		if len(parts) == 1 {
-			return def.Value
-		}
-		// Nested access into the value
-		return e.accessPath(def.Value, parts[1:])
-	}
-
-	// Then, check derived state
+	// First, check derived state (derived values take precedence)
 	if e.schema.StateModel != nil && e.schema.StateModel.Derived != nil {
 		if derived, ok := e.schema.StateModel.Derived[parts[0]]; ok {
 			// Evaluate the derived expression
@@ -87,6 +79,20 @@ func (e *Engine) getVar(path string) any {
 			}
 			return e.accessPath(result, parts[1:])
 		}
+	}
+
+	// Then, check definitions
+	if def, ok := e.schema.Definitions[parts[0]]; ok {
+		if len(parts) == 1 {
+			return def.Value
+		}
+		// Nested access into the value
+		return e.accessPath(def.Value, parts[1:])
+	}
+
+	// Variable not found - add error (unless we're in a some/all/none context)
+	if e.currentElement == nil {
+		e.addError("", "", fmt.Sprintf("Undefined variable '%s' in logic expression", parts[0]), "")
 	}
 
 	return nil

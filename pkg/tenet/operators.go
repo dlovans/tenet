@@ -97,7 +97,8 @@ func (e *Engine) executeOperator(op string, args any) any {
 		return e.opNone(args)
 
 	default:
-		// Unknown operator - return nil
+		// Unknown operator - add error and return nil
+		e.addError("", "", fmt.Sprintf("Unknown operator '%s' in logic expression", op), "")
 		return nil
 	}
 }

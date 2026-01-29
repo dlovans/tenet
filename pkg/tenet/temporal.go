@@ -1,8 +1,59 @@
 package tenet
 
 import (
+	"fmt"
 	"time"
 )
+
+// validateTemporalMap checks for configuration errors in temporal_map.
+// Detects same start/end dates and overlapping ranges.
+func (e *Engine) validateTemporalMap() {
+	if e.schema.TemporalMap == nil || len(e.schema.TemporalMap) == 0 {
+		return
+	}
+
+	for i, branch := range e.schema.TemporalMap {
+		if branch == nil {
+			continue
+		}
+
+		start := branch.ValidRange[0]
+		end := branch.ValidRange[1]
+
+		// Check for same start/end date (invalid zero-length range)
+		if start != nil && end != nil && *start == *end {
+			e.addError("", "", fmt.Sprintf(
+				"Temporal branch %d has same start and end date '%s' (invalid range)",
+				i, *start), "")
+		}
+
+		// Check for overlapping with previous branch
+		if i > 0 {
+			prev := e.schema.TemporalMap[i-1]
+			if prev != nil {
+				var prevEndTime int64 = 1<<62 - 1 // Max int64 (infinity)
+				if prev.ValidRange[1] != nil {
+					if parsed, ok := parseDate(*prev.ValidRange[1]); ok {
+						prevEndTime = parsed.Unix()
+					}
+				}
+
+				var currStartTime int64 = -(1<<62 - 1) // Min int64 (-infinity)
+				if start != nil {
+					if parsed, ok := parseDate(*start); ok {
+						currStartTime = parsed.Unix()
+					}
+				}
+
+				if currStartTime <= prevEndTime {
+					e.addError("", "", fmt.Sprintf(
+						"Temporal branch %d overlaps with branch %d (ranges must not overlap)",
+						i, i-1), "")
+				}
+			}
+		}
+	}
+}
 
 // selectBranch finds the active temporal branch for a given effective date.
 // Returns nil if no branch matches (uses default/unversioned logic).

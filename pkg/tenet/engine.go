@@ -29,29 +29,33 @@ func Run(jsonText string, date time.Time) (string, error) {
 
 	engine := NewEngine(&schema)
 
-	// 2. Select temporal branch and prune inactive rules
+	// 2. Validate and select temporal branch, prune inactive rules
 	if len(schema.TemporalMap) > 0 {
+		engine.validateTemporalMap()
 		branch := engine.selectBranch(date)
 		if branch != nil {
 			engine.prune(branch)
 		}
 	}
 
-	// 3. Evaluate logic tree
-	engine.evaluateLogicTree()
-
-	// 4. Compute derived state
+	// 3. Compute derived state (so logic tree can use derived values)
 	engine.computeDerived()
 
-	// 5. Validate
+	// 4. Evaluate logic tree
+	engine.evaluateLogicTree()
+
+	// 5. Re-compute derived state (in case logic modified inputs)
+	engine.computeDerived()
+
+	// 6. Validate
 	engine.validateDefinitions()
 	engine.checkAttestations()
 
-	// 6. Determine status and attach errors
+	// 7. Determine status and attach errors
 	schema.Errors = engine.errors
 	schema.Status = engine.determineStatus()
 
-	// 7. Marshal result
+	// 8. Marshal result
 	return engine.marshal()
 }
 

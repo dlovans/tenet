@@ -150,8 +150,13 @@ export function validateDefinitions(state: EvalState): void {
         }
 
         // Check required fields
-        if (def.required && (def.value === undefined || def.value === null)) {
-            addError(state, id, '', `Required field '${id}' is missing`);
+        if (def.required) {
+            if (def.value === undefined || def.value === null) {
+                addError(state, id, '', `Required field '${id}' is missing`);
+            } else if ((def.type === 'string' || def.type === 'select') && def.value === '') {
+                // Empty string is also considered "missing" for required string/select fields
+                addError(state, id, '', `Required field '${id}' is missing`);
+            }
         }
 
         // Validate type if value is present

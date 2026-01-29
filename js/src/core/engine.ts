@@ -231,21 +231,24 @@ export function run(
         // 1. Select temporal branch and prune inactive rules
         applyTemporalRouting(state);
 
-        // 2. Evaluate logic tree
-        evaluateLogicTree(state);
-
-        // 3. Compute derived state
+        // 2. Compute derived state (so logic tree can use derived values)
         computeDerived(state);
 
-        // 4. Validate definitions
+        // 3. Evaluate logic tree
+        evaluateLogicTree(state);
+
+        // 4. Re-compute derived state (in case logic modified inputs)
+        computeDerived(state);
+
+        // 5. Validate definitions
         validateDefinitions(state);
 
-        // 5. Check attestations
+        // 6. Check attestations
         checkAttestations(state, (action, ruleId, lawRef) => {
             applyAction(state, action, ruleId, lawRef);
         });
 
-        // 6. Determine status and attach errors
+        // 7. Determine status and attach errors
         state.schema.errors = state.errors.length > 0 ? state.errors : undefined;
         state.schema.status = determineStatus(state);
 

@@ -1,6 +1,6 @@
 {
     "name": "@dlovans/tenet-core",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "type": "module",
     "description": "Declarative logic VM for JSON schemas - reactive validation, temporal routing, and computed state",
     "main": "dist/index.js",
@@ -9,10 +9,6 @@
         ".": {
             "import": "./dist/index.js",
             "types": "./dist/index.d.ts"
-        },
-        "./lint": {
-            "import": "./dist/lint.js",
-            "types": "./dist/lint.d.ts"
         }
     },
     "files": [
@@ -30,8 +26,7 @@
         "schema",
         "form",
         "compliance",
-        "temporal",
-        "linter"
+        "temporal"
     ],
     "author": "Dlovan Sharif",
     "license": "MIT",

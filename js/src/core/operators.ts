@@ -4,6 +4,7 @@
  */
 
 import type { EvalState } from './types.js';
+import { addError } from './validate.js';
 
 /** Operator function signature */
 type OperatorFn = (args: unknown, state: EvalState, resolve: ResolveFn) => unknown;
@@ -116,34 +117,60 @@ function resolveArgs(args: unknown, expected: number, resolve: ResolveFn, state:
 }
 
 /**
- * Get variable value from schema definitions or current element context.
+ * Check if a variable name is defined in the schema.
  */
-function getVar(path: string, state: EvalState): unknown {
+function isVariableDefined(name: string, state: EvalState): boolean {
+    // Check definitions
+    if (state.schema.definitions[name]) {
+        return true;
+    }
+    // Check derived state
+    if (state.schema.state_model?.derived?.[name]) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Get variable value from schema definitions or current element context.
+ * Now accepts an optional resolve function to evaluate derived expressions on-demand.
+ */
+function getVar(path: string, state: EvalState, resolve?: ResolveFn): unknown {
     // Empty path returns current element context (for some/all/none)
     if (path === '') {
         return state.currentElement;
     }
 
     const parts = path.split('.');
+    const rootVar = parts[0];
 
-    // Check definitions first
-    const def = state.schema.definitions[parts[0]];
+    // Check if variable is defined (only for root-level vars, not nested access)
+    if (!isVariableDefined(rootVar, state) && state.currentElement === undefined) {
+        addError(state, '', '', `Undefined variable '${rootVar}' in logic expression`);
+        return null;
+    }
+
+    // First, check derived state (derived values take precedence)
+    if (state.schema.state_model?.derived && resolve) {
+        const derived = state.schema.state_model.derived[rootVar];
+        if (derived?.eval) {
+            // Evaluate the derived expression on-demand
+            const result = resolve(derived.eval, state);
+            if (parts.length === 1) {
+                return result;
+            }
+            return accessPath(result, parts.slice(1));
+        }
+    }
+
+    // Then, check definitions
+    const def = state.schema.definitions[rootVar];
     if (def) {
         if (parts.length === 1) {
             return def.value;
         }
         // Nested access into the value
         return accessPath(def.value, parts.slice(1));
-    }
-
-    // Check derived state
-    if (state.schema.state_model?.derived) {
-        const derived = state.schema.state_model.derived[parts[0]];
-        if (derived) {
-            // Note: derived values should already be computed by this point
-            // This is a fallback for direct access
-            return undefined;
-        }
     }
 
     return undefined;
@@ -172,9 +199,9 @@ function accessPath(value: unknown, parts: string[]): unknown {
 
 const operators: Record<string, OperatorFn> = {
     // === Variable Access ===
-    'var': (args, state) => {
+    'var': (args, state, resolve) => {
         const path = typeof args === 'string' ? args : '';
-        return getVar(path, state);
+        return getVar(path, state, resolve);
     },
 
     // === Comparison Operators ===
@@ -487,7 +514,7 @@ export function applyOperator(
 ): unknown {
     const fn = operators[op];
     if (!fn) {
-        // Unknown operator - return null
+        addError(state, '', '', `Unknown operator '${op}' in logic expression`);
         return null;
     }
     return fn(args, state, resolve);
