@@ -6,8 +6,8 @@
  */
 
 // Re-export lint functions (pure TypeScript, no WASM needed)
-export { lint, isTenetSchema, SCHEMA_URL } from './lint';
-export type { LintIssue, LintResult } from './lint';
+export { lint, isTenetSchema, SCHEMA_URL } from './lint.js';
+export type { LintIssue, LintResult } from './lint.js';
 
 // Type definitions
 export interface TenetResult {
@@ -134,6 +134,13 @@ async function loadWasm(wasmPath: string): Promise<void> {
         // Node.js environment
         const fs = await import('fs');
         const path = await import('path');
+        const { fileURLToPath } = await import('url');
+        const { createRequire } = await import('module');
+
+        // ESM-compatible __dirname and require
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const require = createRequire(import.meta.url);
 
         // Load wasm_exec.js (Go's JS runtime)
         const wasmExecPath = path.resolve(__dirname, '../wasm/wasm_exec.js');
