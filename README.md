@@ -23,8 +23,8 @@ Use it for **smart forms**, **compliance checks**, **game logic**, **workflow au
 - **Dynamic Visibility** — Show/hide fields based on state
 - **Temporal Routing** — Version rules by effective date
 - **Attestation Tracking** — Validate that signatures were collected
-- **Static Linter** — Catch errors before execution
-- **WASM Support** — Runs in browsers
+- **Runtime Validation** — Undefined variables, unknown operators, temporal conflicts
+- **Static Linter** — Catch errors before execution (Go CLI only)
 
 ## Quick Start
 
@@ -84,13 +84,14 @@ valid, err := tenet.Verify(completedDoc, baseSchema)
 ### JavaScript
 
 ```javascript
-import { init, run, verify, lint } from '@dlovans/tenet-core';
+import { run, verify } from '@dlovans/tenet-core';
 
-await init('./tenet.wasm');
+// No initialization needed - pure TypeScript
 const result = run(schema);
+console.log(result.result.status); // 'READY', 'INCOMPLETE', or 'INVALID'
 
-// Lint works without WASM
-const issues = lint(schema);
+// Verify transformation
+const valid = verify(newSchema, oldSchema);
 ```
 
 ### CLI

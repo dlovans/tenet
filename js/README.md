@@ -2,6 +2,8 @@
 
 Declarative logic VM for JSON schemas. Reactive validation, temporal routing, and computed state.
 
+**Pure TypeScript** — No WASM, no native dependencies. Works in browsers, Node.js, Deno, Bun.
+
 ## Installation
 
 ```bash
@@ -13,11 +15,8 @@ npm install @dlovans/tenet-core
 ### Browser
 
 ```html
-<script src="https://unpkg.com/@dlovans/tenet-core/wasm/wasm_exec.js"></script>
 <script type="module">
-import { init, run } from '@dlovans/tenet-core';
-
-await init('/path/to/tenet.wasm');
+import { run } from '@dlovans/tenet-core';
 
 const schema = {
   definitions: {
@@ -33,26 +32,23 @@ const schema = {
 };
 
 const result = run(schema);
-console.log(result);
+console.log(result.result.status); // 'READY'
 </script>
 ```
 
 ### Node.js
 
 ```javascript
-import { init, run, verify } from '@dlovans/tenet-core';
+import { run, verify } from '@dlovans/tenet-core';
 
-// Initialize WASM
-await init('./node_modules/@dlovans/tenet-core/wasm/tenet.wasm');
-
-// Run schema logic
+// Run schema logic - no initialization needed
 const result = run(schema, new Date());
 
 if (result.error) {
   console.error(result.error);
 } else {
   console.log(result.result.status); // 'READY', 'INCOMPLETE', or 'INVALID'
-  console.log(result.result.errors); // Validation errors
+  console.log(result.result.errors); // Validation errors (if any)
 }
 
 // Verify transformation
@@ -62,51 +58,57 @@ console.log(verification.valid);
 
 ## API
 
-### `init(wasmPath?: string): Promise<void>`
-Initialize the WASM module. Must be called before `run()` or `verify()`.
-
 ### `run(schema, date?): TenetResult`
 Execute the schema logic for the given effective date.
+
+- `schema` — TenetSchema object or JSON string
+- `date` — Effective date for temporal routing (default: now)
+
+Returns `{ result: TenetSchema }` or `{ error: string }`.
 
 ### `verify(newSchema, oldSchema): TenetVerifyResult`
 Verify that a transformation is legal by replaying the logic.
 
-### `lint(schema): LintResult` *(No WASM required)*
-Static analysis - find issues without executing the schema.
-
-```javascript
-import { lint } from '@dlovans/tenet-core';
-
-const result = lint(schema);
-// No init() needed - pure TypeScript!
-
-if (!result.valid) {
-  for (const issue of result.issues) {
-    console.log(`${issue.severity}: ${issue.message}`);
-  }
-}
-```
-
-### `isTenetSchema(obj): boolean`
-Check if an object is a Tenet schema.
+Returns `{ valid: boolean, error?: string }`.
 
 ### `isReady(): boolean`
-Check if WASM is initialized.
+Always returns `true`. Kept for backwards compatibility.
 
-## JSON Schema (IDE Support)
+### `init(): Promise<void>` *(deprecated)*
+No-op. Kept for backwards compatibility with v0.1.x.
 
-Add to your schema files for autocompletion:
+## Runtime Validation
 
-```json
-{
-  "$schema": "https://tenet.dev/schema/v1.json",
-  "definitions": { ... }
-}
-```
+The VM automatically detects and reports:
+
+- **Undefined variables** — `{"var": "unknown_field"}`
+- **Unknown operators** — `{"invalid_op": [...]}`
+- **Temporal conflicts** — Overlapping date ranges, same start/end dates
+
+All errors are returned in `result.errors` without failing execution.
 
 ## TypeScript
 
-Full type definitions are included. See `TenetSchema`, `Definition`, `Rule`, `LintResult`, etc.
+Full type definitions included:
+
+```typescript
+import type { TenetSchema, TenetResult, Definition, Rule } from '@dlovans/tenet-core';
+```
+
+## Migration from v0.1.x
+
+```javascript
+// Before (v0.1.x with WASM)
+import { init, run, lint } from '@dlovans/tenet-core';
+await init('./tenet.wasm');
+const result = run(schema);
+const issues = lint(schema);
+
+// After (v0.2.x pure TypeScript)
+import { run } from '@dlovans/tenet-core';
+const result = run(schema);
+// Validation errors are now in result.result.errors
+```
 
 ## License
 
