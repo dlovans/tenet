@@ -6,9 +6,10 @@ import (
 
 // Engine holds state during execution of a schema.
 type Engine struct {
-	schema    *Schema
-	errors    []ValidationError
-	fieldsSet map[string]string // tracks which fields were set by which rule (cycle detection)
+	schema         *Schema
+	errors         []ValidationError
+	fieldsSet      map[string]string // tracks which fields were set by which rule (cycle detection)
+	currentElement any               // current element context for some/all/none operators
 }
 
 // NewEngine creates an engine for the given schema.
@@ -58,9 +59,11 @@ func (e *Engine) resolve(node any) any {
 
 // getVar retrieves a value using dot notation: "user.address.city"
 // Returns nil if the path doesn't exist (distinguishes "unknown" from "zero").
+// Special case: empty path "" returns the current element context (used by some/all/none).
 func (e *Engine) getVar(path string) any {
 	if path == "" {
-		return nil
+		// Return current element context for {"var": ""} in some/all/none
+		return e.currentElement
 	}
 
 	parts := strings.Split(path, ".")
