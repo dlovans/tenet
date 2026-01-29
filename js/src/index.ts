@@ -1,11 +1,11 @@
 /**
  * Tenet - Declarative Logic VM for JSON Schemas
- * 
- * This module provides a JavaScript/TypeScript wrapper around the Tenet WASM binary.
- * Works in both browser and Node.js environments.
+ *
+ * This module provides a pure TypeScript implementation of the Tenet VM.
+ * Works in both browser and Node.js environments with no WASM dependencies.
  */
 
-// Re-export lint functions (pure TypeScript, no WASM needed)
+// Re-export lint functions (pure TypeScript)
 export { lint, isTenetSchema, SCHEMA_URL } from './lint.js';
 export type { LintIssue, LintResult } from './lint.js';
 
@@ -58,6 +58,7 @@ export interface Definition {
     options?: string[];
     label?: string;
     required?: boolean;
+    readonly?: boolean;
     visible?: boolean;
     min?: number;
     max?: number;
@@ -106,116 +107,35 @@ export interface ValidationError {
     law_ref?: string;
 }
 
-// Global references set by WASM
-declare global {
-    var TenetRun: (json: string, date: string) => TenetResult;
-    var TenetVerify: (newJson: string, oldJson: string) => TenetVerifyResult;
-    var Go: new () => GoInstance;
-}
-
-interface GoInstance {
-    importObject: WebAssembly.Imports;
-    run(instance: WebAssembly.Instance): Promise<void>;
-}
-
-let wasmReady = false;
-let wasmReadyPromise: Promise<void> | null = null;
+// Import core engine functions
+import { run as coreRun, verify as coreVerify } from './core/engine.js';
 
 /**
- * Initialize the Tenet WASM module.
- * Must be called before using run() or verify().
- * 
- * @param wasmPath - Path or URL to tenet.wasm file
+ * Initialize the Tenet VM.
+ * This is a no-op in the pure TypeScript implementation (kept for backwards compatibility).
+ *
+ * @deprecated No longer needed - the VM is ready immediately after import.
  */
-export async function init(wasmPath: string = './tenet.wasm'): Promise<void> {
-    if (wasmReady) return;
-    if (wasmReadyPromise) return wasmReadyPromise;
-
-    wasmReadyPromise = loadWasm(wasmPath);
-    await wasmReadyPromise;
-    wasmReady = true;
-}
-
-async function loadWasm(wasmPath: string): Promise<void> {
-    // Detect environment
-    const isBrowser = typeof window !== 'undefined';
-    const isNode = typeof process !== 'undefined' && process.versions?.node;
-
-    if (isBrowser) {
-        // Browser environment
-        // Resolve paths relative to this module
-        const moduleUrl = new URL(import.meta.url);
-        const baseUrl = moduleUrl.href.substring(0, moduleUrl.href.lastIndexOf('/'));
-
-        // Load wasm_exec.js if Go is not defined
-        if (typeof Go === 'undefined') {
-            await new Promise<void>((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = `${baseUrl}/../wasm/wasm_exec.js`;
-                script.onload = () => resolve();
-                script.onerror = () => reject(new Error('Failed to load wasm_exec.js'));
-                document.head.appendChild(script);
-            });
-        }
-
-        // Auto-resolve WASM path if default
-        const resolvedWasmPath = wasmPath === './tenet.wasm'
-            ? `${baseUrl}/../wasm/tenet.wasm`
-            : wasmPath;
-
-        const go = new Go();
-        const result = await WebAssembly.instantiateStreaming(
-            fetch(resolvedWasmPath),
-            go.importObject
-        );
-        go.run(result.instance);
-    } else if (isNode) {
-        // Node.js environment
-        const fs = await import('fs');
-        const path = await import('path');
-        const { fileURLToPath } = await import('url');
-        const { createRequire } = await import('module');
-
-        // ESM-compatible __dirname and require
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = path.dirname(__filename);
-        const require = createRequire(import.meta.url);
-
-        // Load wasm_exec.js (Go's JS runtime)
-        const wasmExecPath = path.resolve(__dirname, '../wasm/wasm_exec.js');
-        require(wasmExecPath);
-
-        const go = new Go();
-        const wasmBuffer = fs.readFileSync(wasmPath);
-        const result = await WebAssembly.instantiate(wasmBuffer, go.importObject);
-        go.run(result.instance);
-    } else {
-        throw new Error('Unsupported environment');
-    }
+export async function init(_wasmPath?: string): Promise<void> {
+    // No-op: pure TypeScript implementation doesn't need initialization
+    return Promise.resolve();
 }
 
 /**
  * Run the Tenet VM on a schema.
- * 
+ *
  * @param schema - The schema object or JSON string
  * @param date - Effective date (ISO 8601 string or Date object)
  * @returns The transformed schema with computed state, errors, and status
  */
 export function run(schema: TenetSchema | string, date: Date | string = new Date()): TenetResult {
-    if (!wasmReady) {
-        throw new Error('Tenet not initialized. Call init() first.');
-    }
-
-    const jsonStr = typeof schema === 'string' ? schema : JSON.stringify(schema);
-    const dateStr = date instanceof Date ? date.toISOString() : date;
-
-    return globalThis.TenetRun(jsonStr, dateStr);
+    return coreRun(schema, date);
 }
 
 /**
  * Verify that a schema transformation is legal.
  * Re-runs the logic on the old schema and compares with the new schema.
- * 
+ *
  * @param newSchema - The transformed schema
  * @param oldSchema - The original schema
  * @returns Whether the transformation is valid
@@ -224,19 +144,13 @@ export function verify(
     newSchema: TenetSchema | string,
     oldSchema: TenetSchema | string
 ): TenetVerifyResult {
-    if (!wasmReady) {
-        throw new Error('Tenet not initialized. Call init() first.');
-    }
-
-    const newJson = typeof newSchema === 'string' ? newSchema : JSON.stringify(newSchema);
-    const oldJson = typeof oldSchema === 'string' ? oldSchema : JSON.stringify(oldSchema);
-
-    return globalThis.TenetVerify(newJson, oldJson);
+    return coreVerify(newSchema, oldSchema);
 }
 
 /**
- * Check if the WASM module is ready.
+ * Check if the VM is ready.
+ * Always returns true in the pure TypeScript implementation.
  */
 export function isReady(): boolean {
-    return wasmReady;
+    return true;
 }
