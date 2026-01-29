@@ -87,6 +87,15 @@ func (e *Engine) executeOperator(op string, args any) any {
 		a := e.resolveArgs(args, 2)
 		return e.opIn(a[0], a[1])
 
+	case "some":
+		return e.opSome(args)
+
+	case "all":
+		return e.opAll(args)
+
+	case "none":
+		return e.opNone(args)
+
 	default:
 		// Unknown operator - return nil
 		return nil
@@ -257,6 +266,108 @@ func (e *Engine) opDivide(a, b any) any {
 }
 
 // === Collection Operators ===
+
+// opSome returns true if ANY element in the array satisfies the condition.
+// Syntax: {"some": [{"var": "items"}, {"==": [{"var": ""}, "special"]}]}
+func (e *Engine) opSome(args any) bool {
+	arr, ok := args.([]any)
+	if !ok || len(arr) < 2 {
+		return false
+	}
+
+	// First arg is the array (resolve it)
+	collection := e.resolve(arr[0])
+	items, ok := collection.([]any)
+	if !ok || len(items) == 0 {
+		return false
+	}
+
+	// Second arg is the condition
+	condition := arr[1]
+
+	// Check if any element satisfies the condition
+	for _, item := range items {
+		if e.evalWithContext(condition, item) {
+			return true
+		}
+	}
+	return false
+}
+
+// opAll returns true if ALL elements in the array satisfy the condition.
+// Syntax: {"all": [{"var": "items"}, {">=": [{"var": ""}, 50]}]}
+func (e *Engine) opAll(args any) bool {
+	arr, ok := args.([]any)
+	if !ok || len(arr) < 2 {
+		return false
+	}
+
+	// First arg is the array (resolve it)
+	collection := e.resolve(arr[0])
+	items, ok := collection.([]any)
+	if !ok {
+		return false
+	}
+
+	// Empty array returns true for "all" (vacuous truth)
+	if len(items) == 0 {
+		return true
+	}
+
+	// Second arg is the condition
+	condition := arr[1]
+
+	// Check if all elements satisfy the condition
+	for _, item := range items {
+		if !e.evalWithContext(condition, item) {
+			return false
+		}
+	}
+	return true
+}
+
+// opNone returns true if NO elements in the array satisfy the condition.
+// Syntax: {"none": [{"var": "items"}, {"==": [{"var": ""}, "forbidden"]}]}
+func (e *Engine) opNone(args any) bool {
+	arr, ok := args.([]any)
+	if !ok || len(arr) < 2 {
+		return false
+	}
+
+	// First arg is the array (resolve it)
+	collection := e.resolve(arr[0])
+	items, ok := collection.([]any)
+	if !ok {
+		return false
+	}
+
+	// Empty array returns true for "none"
+	if len(items) == 0 {
+		return true
+	}
+
+	// Second arg is the condition
+	condition := arr[1]
+
+	// Check that no element satisfies the condition
+	for _, item := range items {
+		if e.evalWithContext(condition, item) {
+			return false
+		}
+	}
+	return true
+}
+
+// evalWithContext evaluates a condition with a temporary context value.
+// Used by some/all/none to set the current element as {"var": ""}.
+func (e *Engine) evalWithContext(condition any, contextValue any) bool {
+	// Save and restore the context value for {"var": ""}
+	oldContext := e.currentElement
+	e.currentElement = contextValue
+	result := e.isTruthy(e.resolve(condition))
+	e.currentElement = oldContext
+	return result
+}
 
 // opIn checks if needle is in haystack (array or string).
 func (e *Engine) opIn(needle, haystack any) bool {

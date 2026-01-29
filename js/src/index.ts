@@ -20,6 +20,24 @@ export interface TenetVerifyResult {
     error?: string;
 }
 
+export interface Evidence {
+    provider_audit_id?: string;
+    timestamp?: string;
+    signer_id?: string;
+    logic_version?: string;
+}
+
+export interface Attestation {
+    statement: string;
+    law_ref?: string;
+    required_role?: string;
+    provider?: string;
+    required?: boolean;
+    signed?: boolean;
+    evidence?: Evidence;
+    on_sign?: Action;
+}
+
 export interface TenetSchema {
     protocol?: string;
     schema_id?: string;
@@ -31,6 +49,7 @@ export interface TenetSchema {
     state_model?: StateModel;
     errors?: ValidationError[];
     status?: 'READY' | 'INCOMPLETE' | 'INVALID';
+    attestations?: Record<string, Attestation>;
 }
 
 export interface Definition {

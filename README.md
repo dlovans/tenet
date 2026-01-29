@@ -2,7 +2,7 @@
 
 A declarative logic VM for JSON. Define rules, compute values, validate constraints — all in pure JSON.
 
-[![Go](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)](https://go.dev)
+[![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go)](https://go.dev)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## What It Does
@@ -75,7 +75,7 @@ Output: `tax_bracket` is computed as `"low"`.
 ### Go
 
 ```go
-import "github.com/tenet-vm/tenet/pkg/tenet"
+import "github.com/dlovans/tenet/pkg/tenet"
 
 result, err := tenet.Run(jsonString, time.Now())
 valid, err := tenet.Verify(completedDoc, baseSchema)
@@ -84,7 +84,7 @@ valid, err := tenet.Verify(completedDoc, baseSchema)
 ### JavaScript
 
 ```javascript
-import { init, run, verify, lint } from '@tenet-vm/tenet';
+import { init, run, verify, lint } from '@dlovans/tenet-core';
 
 await init('./tenet.wasm');
 const result = run(schema);

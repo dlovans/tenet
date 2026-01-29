@@ -62,7 +62,7 @@ func printUsage() {
 	fmt.Println("  tenet run -date 2025-06-15 -file schema.json")
 	fmt.Println("  cat schema.json | tenet run -date 2025-06-15")
 	fmt.Println("  tenet lint -file schema.json")
-	fmt.Println("  tenet verify -new updated.json -old original.json")
+	fmt.Println("  tenet verify -new updated.json -base original.json")
 }
 
 func handleRun(dateStr, filePath string) {
