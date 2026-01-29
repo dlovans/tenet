@@ -9,7 +9,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"tenet/pkg/tenet"
+	"github.com/dlovans/tenet/pkg/tenet"
 )
 
 func main() {
