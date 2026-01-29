@@ -1,6 +1,6 @@
 {
     "name": "@dlovans/tenet-core",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "type": "module",
     "description": "Declarative logic VM for JSON schemas - reactive validation, temporal routing, and computed state",
     "main": "dist/index.js",
