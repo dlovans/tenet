@@ -24,9 +24,13 @@ export type {
     ErrorKind,
 } from './core/types.js';
 
+export type { LintResult, LintIssue, LintSeverity } from './core/lint.js';
+
 // Import core engine functions
 import type { TenetSchema, TenetResult, TenetVerifyResult } from './core/types.js';
+import type { LintResult } from './core/lint.js';
 import { run as coreRun, verify as coreVerify } from './core/engine.js';
+import { lint as coreLint } from './core/lint.js';
 
 /**
  * Initialize the Tenet VM.
@@ -63,6 +67,17 @@ export function verify(
     oldSchema: TenetSchema | string
 ): TenetVerifyResult {
     return coreVerify(newSchema, oldSchema);
+}
+
+/**
+ * Lint a schema for structural errors and type mismatches.
+ * Returns issues without executing the schema — pure static analysis.
+ *
+ * @param schema - The schema object or JSON string
+ * @returns Lint result with validity flag and issue list
+ */
+export function lint(schema: TenetSchema | string): LintResult {
+    return coreLint(schema);
 }
 
 /**
