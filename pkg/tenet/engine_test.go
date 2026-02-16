@@ -293,11 +293,11 @@ func TestVerify(t *testing.T) {
 	}
 
 	// Verify should pass
-	valid, err := Verify(newJson, oldJson)
-	if err != nil {
-		t.Fatalf("Verify failed: %v", err)
+	result := Verify(newJson, oldJson)
+	if result.Error != "" {
+		t.Fatalf("Verify error: %s", result.Error)
 	}
-	if !valid {
-		t.Error("Expected verification to pass")
+	if !result.Valid {
+		t.Errorf("Expected verification to pass, got issues: %+v", result.Issues)
 	}
 }

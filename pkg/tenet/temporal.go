@@ -22,7 +22,7 @@ func (e *Engine) validateTemporalMap() {
 
 		// Check for same start/end date (invalid zero-length range)
 		if start != nil && end != nil && *start == *end {
-			e.addError("", "", fmt.Sprintf(
+			e.addError("", "", ErrRuntimeWarning, fmt.Sprintf(
 				"Temporal branch %d has same start and end date '%s' (invalid range)",
 				i, *start), "")
 		}
@@ -46,7 +46,7 @@ func (e *Engine) validateTemporalMap() {
 				}
 
 				if currStartTime <= prevEndTime {
-					e.addError("", "", fmt.Sprintf(
+					e.addError("", "", ErrRuntimeWarning, fmt.Sprintf(
 						"Temporal branch %d overlaps with branch %d (ranges must not overlap)",
 						i, i-1), "")
 				}

@@ -32,6 +32,7 @@ function validateTemporalMap(state: EvalState): void {
                 state,
                 '',
                 '',
+                'runtime_warning',
                 `Temporal branch ${i} has same start and end date '${start}' (invalid range)`
             );
         }
@@ -52,6 +53,7 @@ function validateTemporalMap(state: EvalState): void {
                         state,
                         '',
                         '',
+                        'runtime_warning',
                         `Temporal branch ${i} overlaps with branch ${i - 1} (ranges must not overlap)`
                     );
                 }

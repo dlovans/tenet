@@ -9,7 +9,7 @@ Tenet is a declarative logic VM for JSON schemas. It handles temporal routing, r
 - [Schema Reference](#schema-reference)
 - [Operators](#operators)
 - [API Reference](#api-reference)
-- [WASM/JavaScript](#wasmjavascript)
+- [JavaScript / TypeScript](#javascript--typescript)
 - [Examples](#examples)
 
 ---
@@ -20,13 +20,13 @@ Tenet is a declarative logic VM for JSON schemas. It handles temporal routing, r
 
 ```bash
 # Go
-go get github.com/yourusername/tenet
+go get github.com/dlovans/tenet/pkg/tenet
+
+# npm (browser + Node.js) — pure TypeScript, no WASM
+npm install @dlovans/tenet-core
 
 # Build CLI
 go build -o tenet ./cmd/tenet
-
-# Build WASM for browsers
-GOOS=js GOARCH=wasm go build -o tenet.wasm ./wasm
 ```
 
 ### Minimal Example
@@ -148,7 +148,7 @@ Version logic based on effective dates.
 | `type` | string | `string`, `number`, `boolean`, `select`, `date`, `attestation`, `currency` |
 | `value` | any | Current value (null = unset) |
 | `required` | boolean | Is this field required? |
-| `visible` | boolean | UI visibility hint |
+| `visible` | boolean | UI visibility (defaults to `true` when not specified) |
 | `label` | string | Human-readable label |
 | `options` | array | Options for `select` type |
 | `min` | number | Minimum value (numbers) |
@@ -156,7 +156,7 @@ Version logic based on effective dates.
 | `step` | number | UI increment hint |
 | `min_length` | integer | Minimum string length |
 | `max_length` | integer | Maximum string length |
-| `pattern` | string | Regex pattern (placeholder) |
+| `pattern` | string | Regex pattern for validation |
 
 ### Rule Object
 
@@ -253,14 +253,24 @@ Version logic based on effective dates.
 ### Go
 
 ```go
-import "github.com/yourusername/tenet"
-import "time"
+import (
+    "time"
+    "github.com/dlovans/tenet/pkg/tenet"
+)
 
 // Run executes the schema logic
 result, err := tenet.Run(jsonString, time.Now())
 
-// Verify checks a transformation is legal
-valid, err := tenet.Verify(newJSON, oldJSON)
+// Verify checks a transformation is legal (returns structured result)
+vr := tenet.Verify(newJSON, baseJSON)
+if vr.Error != "" {
+    // Internal error (parse failure, panic recovery)
+}
+if !vr.Valid {
+    for _, issue := range vr.Issues {
+        fmt.Println(issue.Code, issue.FieldID, issue.Message)
+    }
+}
 ```
 
 ### CLI
@@ -273,76 +283,72 @@ valid, err := tenet.Verify(newJSON, oldJSON)
 cat schema.json | ./tenet run -date 2025-01-16
 
 # Verify transformation
-./tenet verify -new updated.json -old original.json
+./tenet verify -new completed.json -base original.json
+
+# Static analysis
+./tenet lint -file schema.json
 ```
 
 ---
 
-## WASM/JavaScript
+## JavaScript / TypeScript
 
-### Loading WASM
+The TypeScript package is a pure TypeScript implementation — no WASM, no `init()` required. The VM is ready immediately on import.
 
-```html
-<script src="wasm_exec.js"></script>
-<script>
-const go = new Go();
-WebAssembly.instantiateStreaming(fetch("tenet.wasm"), go.importObject)
-  .then(result => go.run(result.instance));
-</script>
-```
+### Setup
 
-### API
+```typescript
+import { run, verify } from '@dlovans/tenet-core';
 
-```javascript
 // Run schema
-const result = TenetRun(jsonString, "2025-01-16");
+const result = run(schema, new Date());
 if (result.error) {
   console.error(result.error);
 } else {
-  console.log(result.result); // Transformed schema object
+  console.log(result.result.status);      // "READY" | "INCOMPLETE" | "INVALID"
+  console.log(result.result.errors);      // ValidationError[] (with kind field)
+  console.log(result.result.definitions); // Updated definitions
 }
 
-// Verify transformation
-const verification = TenetVerify(newJSON, oldJSON);
-console.log(verification.valid); // true or false
-console.log(verification.error); // Error message if failed
+// Verify transformation (structured output)
+const vr = verify(completedDoc, baseSchema);
+if (!vr.valid) {
+  for (const issue of vr.issues ?? []) {
+    console.log(issue.code, issue.field_id, issue.message);
+  }
+}
 ```
 
 ### Reactive UI Pattern
 
-```javascript
-const schema = { /* your schema */ };
+```typescript
+import { run, TenetSchema } from '@dlovans/tenet-core';
 
-function onFieldChange(fieldId, newValue) {
-  // Update the value in definitions
+function onFieldChange(fieldId: string, newValue: any) {
   schema.definitions[fieldId].value = newValue;
-  
-  // Re-run the VM
-  const result = TenetRun(JSON.stringify(schema), new Date().toISOString());
-  
-  if (result.result) {
-    // Update UI based on new state
+  const result = run(schema, new Date());
+
+  if (!result.error) {
     updateUI(result.result);
   }
 }
 
-function updateUI(schema) {
+function updateUI(schema: TenetSchema) {
   for (const [id, def] of Object.entries(schema.definitions)) {
-    // Show/hide fields
-    document.getElementById(id).hidden = !def.visible;
-    
-    // Update constraints
-    if (def.min !== undefined) {
-      document.getElementById(id).min = def.min;
+    document.getElementById(id).hidden = def.visible === false;
+
+    if (def.readonly) {
+      document.getElementById(id).setAttribute('disabled', 'true');
     }
+    if (def.min !== undefined) document.getElementById(id).min = def.min;
+    if (def.max !== undefined) document.getElementById(id).max = def.max;
   }
-  
-  // Display errors
+
+  // Display errors (each error has a kind for programmatic handling)
   for (const error of schema.errors || []) {
-    showError(error.field_id, error.message, error.law_ref);
+    showError(error.field_id, error.message, error.kind);
   }
-  
-  // Update status indicator
+
   setFormStatus(schema.status); // "READY", "INCOMPLETE", "INVALID"
 }
 ```
@@ -433,7 +439,7 @@ The VM sets `status` on the output:
 
 ## Error Format
 
-Errors are accumulated (non-blocking) in the `errors` array:
+Errors are accumulated (non-blocking) in the `errors` array. Each error includes a `kind` field for programmatic handling:
 
 ```json
 {
@@ -441,10 +447,23 @@ Errors are accumulated (non-blocking) in the `errors` array:
     {
       "field_id": "loan_amount",
       "rule_id": "max_limit_rule",
+      "kind": "constraint_violation",
       "message": "Loan amount exceeds maximum of 500000",
       "law_ref": "Lending Act §12.3"
     }
   ],
   "status": "INVALID"
 }
+```
+
+### Error Kinds
+
+| Kind | Meaning |
+|------|---------|
+| `type_mismatch` | Value doesn't match the declared type |
+| `missing_required` | Required field has no value |
+| `constraint_violation` | Value violates min/max/pattern/length constraints |
+| `attestation_incomplete` | Required attestation not signed or missing evidence |
+| `runtime_warning` | Non-fatal issue (e.g., cycle detected during rule evaluation) |
+| `cycle_detected` | Derived field dependency cycle detected |
 ```

@@ -2,6 +2,8 @@ package tenet
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 )
 
 // validateDefinitions checks all definitions for type correctness and required fields.
@@ -15,11 +17,11 @@ func (e *Engine) validateDefinitions() {
 		// Check required fields
 		if def.Required {
 			if def.Value == nil {
-				e.addError(id, "", fmt.Sprintf("Required field '%s' is missing", id), "")
+				e.addError(id, "", ErrMissingRequired, fmt.Sprintf("Required field '%s' is missing", id), "")
 			} else if def.Type == "string" || def.Type == "select" {
 				// Empty string is also considered "missing" for required string/select fields
 				if strVal, ok := def.Value.(string); ok && strVal == "" {
-					e.addError(id, "", fmt.Sprintf("Required field '%s' is missing", id), "")
+					e.addError(id, "", ErrMissingRequired, fmt.Sprintf("Required field '%s' is missing", id), "")
 				}
 			}
 		}
@@ -32,14 +34,21 @@ func (e *Engine) validateDefinitions() {
 }
 
 // validateType ensures a value matches its definition type and constraints.
+// Array values are allowed — the declared type describes the element type,
+// used by collection operators (some/all/none). Scalar validation is skipped for arrays.
 func (e *Engine) validateType(id string, def *Definition) {
 	value := def.Value
+
+	// Skip scalar validation for array values (used with some/all/none operators)
+	if isSlice(value) {
+		return
+	}
 
 	switch def.Type {
 	case "string":
 		strVal, ok := value.(string)
 		if !ok {
-			e.addError(id, "", fmt.Sprintf("Field '%s' must be a string", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Field '%s' must be a string", id), "")
 			return
 		}
 		// Validate string length constraints
@@ -48,7 +57,7 @@ func (e *Engine) validateType(id string, def *Definition) {
 	case "number", "currency":
 		numVal, ok := toFloat(value)
 		if !ok {
-			e.addError(id, "", fmt.Sprintf("Field '%s' must be a number", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Field '%s' must be a number", id), "")
 			return
 		}
 		// Validate numeric range constraints
@@ -56,30 +65,30 @@ func (e *Engine) validateType(id string, def *Definition) {
 
 	case "boolean":
 		if _, ok := value.(bool); !ok {
-			e.addError(id, "", fmt.Sprintf("Field '%s' must be a boolean", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Field '%s' must be a boolean", id), "")
 		}
 
 	case "select":
 		// Validate that value is one of the allowed options
 		strVal, ok := value.(string)
 		if !ok {
-			e.addError(id, "", fmt.Sprintf("Field '%s' must be a string", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Field '%s' must be a string", id), "")
 			return
 		}
 		if !e.isValidOption(strVal, def.Options) {
-			e.addError(id, "", fmt.Sprintf("Field '%s' value '%s' is not a valid option", id, strVal), "")
+			e.addError(id, "", ErrConstraintViolation, fmt.Sprintf("Field '%s' value '%s' is not a valid option", id, strVal), "")
 		}
 
 	case "attestation":
 		// Attestations must be boolean
 		if _, ok := value.(bool); !ok {
-			e.addError(id, "", fmt.Sprintf("Attestation '%s' must be a boolean", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Attestation '%s' must be a boolean", id), "")
 		}
 
 	case "date":
 		// Validate date format
 		if _, ok := parseDate(value); !ok {
-			e.addError(id, "", fmt.Sprintf("Field '%s' must be a valid date", id), "")
+			e.addError(id, "", ErrTypeMismatch, fmt.Sprintf("Field '%s' must be a valid date", id), "")
 		}
 	}
 }
@@ -87,22 +96,28 @@ func (e *Engine) validateType(id string, def *Definition) {
 // validateNumericConstraints checks min/max bounds for numeric values.
 func (e *Engine) validateNumericConstraints(id string, value float64, def *Definition) {
 	if def.Min != nil && value < *def.Min {
-		e.addError(id, "", fmt.Sprintf("Field '%s' value %.2f is below minimum %.2f", id, value, *def.Min), "")
+		e.addError(id, "", ErrConstraintViolation, fmt.Sprintf("Field '%s' value %.2f is below minimum %.2f", id, value, *def.Min), "")
 	}
 	if def.Max != nil && value > *def.Max {
-		e.addError(id, "", fmt.Sprintf("Field '%s' value %.2f exceeds maximum %.2f", id, value, *def.Max), "")
+		e.addError(id, "", ErrConstraintViolation, fmt.Sprintf("Field '%s' value %.2f exceeds maximum %.2f", id, value, *def.Max), "")
 	}
 }
 
 // validateStringConstraints checks length and pattern constraints for strings.
 func (e *Engine) validateStringConstraints(id string, value string, def *Definition) {
 	if def.MinLength != nil && len(value) < *def.MinLength {
-		e.addError(id, "", fmt.Sprintf("Field '%s' is too short (minimum %d characters)", id, *def.MinLength), "")
+		e.addError(id, "", ErrConstraintViolation, fmt.Sprintf("Field '%s' is too short (minimum %d characters)", id, *def.MinLength), "")
 	}
 	if def.MaxLength != nil && len(value) > *def.MaxLength {
-		e.addError(id, "", fmt.Sprintf("Field '%s' is too long (maximum %d characters)", id, *def.MaxLength), "")
+		e.addError(id, "", ErrConstraintViolation, fmt.Sprintf("Field '%s' is too long (maximum %d characters)", id, *def.MaxLength), "")
 	}
-	// Note: Pattern validation would require regexp package, omitted for now
+	if def.Pattern != "" {
+		re, err := regexp.Compile(def.Pattern)
+		if err == nil && !re.MatchString(value) {
+			e.addError(id, "", ErrConstraintViolation,
+				fmt.Sprintf("Field '%s' does not match required pattern", id), "")
+		}
+	}
 }
 
 // checkAttestations ensures all required attestations are confirmed.
@@ -114,7 +129,7 @@ func (e *Engine) checkAttestations() {
 			continue
 		}
 		if def.Required && def.Value != true {
-			e.addError(id, "", fmt.Sprintf("Required attestation '%s' not confirmed", id), "")
+			e.addError(id, "", ErrAttestationIncomplete, fmt.Sprintf("Required attestation '%s' not confirmed", id), "")
 		}
 	}
 
@@ -132,9 +147,9 @@ func (e *Engine) checkAttestations() {
 		// Validate required attestations
 		if att.Required {
 			if !att.Signed {
-				e.addError(id, "", fmt.Sprintf("Required attestation '%s' not signed", id), att.LawRef)
+				e.addError(id, "", ErrAttestationIncomplete, fmt.Sprintf("Required attestation '%s' not signed", id), att.LawRef)
 			} else if att.Evidence == nil || att.Evidence.ProviderAuditID == "" {
-				e.addError(id, "", fmt.Sprintf("Attestation '%s' signed but missing evidence", id), att.LawRef)
+				e.addError(id, "", ErrAttestationIncomplete, fmt.Sprintf("Attestation '%s' signed but missing evidence", id), att.LawRef)
 			}
 		}
 	}
@@ -155,32 +170,25 @@ func (e *Engine) isValidOption(value string, options []string) bool {
 
 // determineStatus calculates the document status based on validation errors.
 func (e *Engine) determineStatus() DocStatus {
-	hasTypeErrors := false
-	hasMissingRequired := false
-	hasMissingAttestations := false
-
 	for _, err := range e.errors {
-		msg := err.Message
-		// Simple heuristic based on error message patterns
-		if containsString(msg, "must be a") {
-			hasTypeErrors = true
-		} else if containsString(msg, "missing") || containsString(msg, "Required field") {
-			hasMissingRequired = true
-		} else if containsString(msg, "attestation") {
-			hasMissingAttestations = true
+		if err.Kind == ErrTypeMismatch {
+			return StatusInvalid
 		}
 	}
-
-	if hasTypeErrors {
-		return StatusInvalid
+	for _, err := range e.errors {
+		if err.Kind == ErrMissingRequired || err.Kind == ErrAttestationIncomplete {
+			return StatusIncomplete
+		}
 	}
-	if hasMissingRequired || hasMissingAttestations {
-		return StatusIncomplete
+	for _, err := range e.errors {
+		if err.Kind == ErrConstraintViolation {
+			return StatusInvalid
+		}
 	}
 	return StatusReady
 }
 
 // containsString is a simple substring check.
 func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && contains(s, substr)
+	return strings.Contains(s, substr)
 }

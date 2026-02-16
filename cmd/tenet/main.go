@@ -123,16 +123,24 @@ func handleVerify(newPath, basePath string) {
 		os.Exit(1)
 	}
 
-	valid, err := tenet.Verify(string(newJson), string(baseJson))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Verification failed: %v\n", err)
+	result := tenet.Verify(string(newJson), string(baseJson))
+
+	if result.Error != "" {
+		fmt.Fprintf(os.Stderr, "Verification error: %s\n", result.Error)
 		os.Exit(1)
 	}
 
-	if valid {
+	if result.Valid {
 		fmt.Println("✓ Document verified: transformation is legal")
 	} else {
 		fmt.Println("✗ Document verification failed")
+		for _, issue := range result.Issues {
+			location := ""
+			if issue.FieldID != "" {
+				location = fmt.Sprintf(" [%s]", issue.FieldID)
+			}
+			fmt.Printf("  %s%s: %s\n", issue.Code, location, issue.Message)
+		}
 		os.Exit(1)
 	}
 }

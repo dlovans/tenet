@@ -7,6 +7,7 @@ import type {
     TenetSchema,
     TenetResult,
     TenetVerifyResult,
+    VerifyIssue,
     EvalState,
     Rule,
     Action,
@@ -96,7 +97,7 @@ function setDefinitionValue(state: EvalState, key: string, value: unknown, ruleI
     // Cycle detection
     const prevRule = state.fieldsSet.get(key);
     if (prevRule && prevRule !== ruleId) {
-        addError(state, key, ruleId, `Potential cycle: field '${key}' set by rule '${prevRule}' and again by rule '${ruleId}'`);
+        addError(state, key, ruleId, 'cycle_detected', `Potential cycle: field '${key}' set by rule '${prevRule}' and again by rule '${ruleId}'`);
     }
     state.fieldsSet.set(key, ruleId);
 
@@ -140,7 +141,7 @@ function applyAction(state: EvalState, action: Action | undefined, ruleId: strin
 
     // Emit error if specified
     if (action.error_msg) {
-        addError(state, '', ruleId, action.error_msg, lawRef);
+        addError(state, '', ruleId, 'runtime_warning', action.error_msg, lawRef);
     }
 }
 
@@ -181,13 +182,22 @@ function computeDerived(state: EvalState): void {
         // Evaluate the expression
         const value = resolve(derivedDef.eval, state);
 
-        // Store the computed value as a definition (readonly)
-        state.schema.definitions[name] = {
-            type: inferType(value),
-            value,
-            readonly: true,
-            visible: true,
-        };
+        // Preserve existing definition metadata if present
+        const existing = state.schema.definitions[name];
+        if (existing) {
+            existing.value = value;
+            existing.readonly = true;
+            if (existing.visible === undefined) {
+                existing.visible = true;
+            }
+        } else {
+            state.schema.definitions[name] = {
+                type: inferType(value),
+                value,
+                readonly: true,
+                visible: true,
+            };
+        }
     }
 }
 
@@ -226,6 +236,7 @@ export function run(
             effectiveDate: date,
             fieldsSet: new Map(),
             errors: [],
+            derivedInProgress: new Set(),
         };
 
         // 1. Select temporal branch and prune inactive rules
@@ -272,29 +283,34 @@ function getVisibleEditableFields(schema: TenetSchema): Set<string> {
 }
 
 /**
- * Count visible fields in a schema.
+ * Get a sorted, comma-joined string of visible field IDs for convergence detection.
  */
-function countVisibleFields(schema: TenetSchema): number {
-    let count = 0;
-    for (const def of Object.values(schema.definitions)) {
-        if (def?.visible) {
-            count++;
-        }
-    }
-    return count;
+function getVisibleFieldIds(schema: TenetSchema): string {
+    return Object.entries(schema.definitions)
+        .filter(([, def]) => def?.visible)
+        .map(([id]) => id)
+        .sort()
+        .join(',');
 }
 
 /**
  * Validate that the final state matches expected values.
+ * Collects ALL issues instead of bailing on the first — the UI needs the complete picture.
  */
 function validateFinalState(
     newSchema: TenetSchema,
     resultSchema: TenetSchema
-): [boolean, string | undefined] {
+): TenetVerifyResult {
+    const issues: VerifyIssue[] = [];
+
     // Check for unknown/injected fields in newSchema that don't exist in result
     for (const id of Object.keys(newSchema.definitions)) {
         if (!(id in resultSchema.definitions)) {
-            return [false, `Unknown field '${id}' not in schema`];
+            issues.push({
+                code: 'unknown_field',
+                field_id: id,
+                message: `Field '${id}' does not exist in the schema`,
+            });
         }
     }
 
@@ -306,18 +322,30 @@ function validateFinalState(
 
         const newDef = newSchema.definitions[id];
         if (!newDef) {
-            return [false, `Computed field '${id}' missing in submitted document`];
+            issues.push({
+                code: 'computed_mismatch',
+                field_id: id,
+                message: `Computed field '${id}' is missing from the submitted document`,
+                expected: resultDef.value,
+            });
+            continue;
         }
 
         if (!compareEqual(newDef.value, resultDef.value)) {
-            return [false, `Computed field '${id}' mismatch: claimed ${JSON.stringify(newDef.value)}, expected ${JSON.stringify(resultDef.value)}`];
+            issues.push({
+                code: 'computed_mismatch',
+                field_id: id,
+                message: `Computed field '${id}' was modified`,
+                expected: resultDef.value,
+                claimed: newDef.value,
+            });
         }
     }
 
     // Verify attestations are fulfilled
     if (resultSchema.attestations) {
         for (const [id, resultAtt] of Object.entries(resultSchema.attestations)) {
-            if (!resultAtt) {
+            if (!resultAtt?.required) {
                 continue;
             }
 
@@ -326,36 +354,62 @@ function validateFinalState(
                 continue;
             }
 
-            if (resultAtt.required) {
-                if (!newAtt.signed) {
-                    return [false, `Required attestation '${id}' not signed`];
-                }
-                if (!newAtt.evidence?.provider_audit_id) {
-                    return [false, `Attestation '${id}' missing evidence`];
-                }
-                if (!newAtt.evidence?.timestamp) {
-                    return [false, `Attestation '${id}' missing timestamp`];
-                }
+            if (!newAtt.signed) {
+                issues.push({
+                    code: 'attestation_unsigned',
+                    field_id: id,
+                    message: `Required attestation '${id}' has not been signed`,
+                });
+                continue; // No point checking evidence if unsigned
+            }
+
+            if (!newAtt.evidence?.provider_audit_id) {
+                issues.push({
+                    code: 'attestation_no_evidence',
+                    field_id: id,
+                    message: `Attestation '${id}' is signed but missing proof of signing`,
+                });
+            }
+
+            if (!newAtt.evidence?.timestamp) {
+                issues.push({
+                    code: 'attestation_no_timestamp',
+                    field_id: id,
+                    message: `Attestation '${id}' is signed but missing a timestamp`,
+                });
             }
         }
     }
 
     // Verify status matches
     if (newSchema.status !== resultSchema.status) {
-        return [false, `Status mismatch: claimed ${newSchema.status}, expected ${resultSchema.status}`];
+        issues.push({
+            code: 'status_mismatch',
+            message: 'The document status does not match what was computed',
+            expected: resultSchema.status,
+            claimed: newSchema.status,
+        });
     }
 
-    return [true, undefined];
+    return {
+        valid: issues.length === 0,
+        status: resultSchema.status,
+        issues: issues.length > 0 ? issues : undefined,
+        schema: resultSchema,
+    };
 }
 
 /**
  * Verify that a completed document was correctly derived from a base schema.
  * Simulates the user's journey by iteratively copying visible field values and re-running.
  *
+ * Returns a structured result with all issues found (not just the first).
+ * Crash-safe: catches any unexpected error and returns it as an internal_error issue.
+ *
  * @param newSchema - The completed/submitted schema
  * @param oldSchema - The original base schema
  * @param maxIterations - Maximum replay iterations (default: 100)
- * @returns Whether the transformation was valid
+ * @returns Structured verification result
  */
 export function verify(
     newSchema: TenetSchema | string,
@@ -383,7 +437,7 @@ export function verify(
 
         // Start with base schema
         let currentSchema = parsedOldSchema;
-        let previousVisibleCount = -1;
+        let previousVisibleIds = '';
 
         for (let iteration = 0; iteration < maxIterations; iteration++) {
             // Count visible editable fields before copying
@@ -413,27 +467,46 @@ export function verify(
             // Run the schema
             const runResult = run(currentSchema, effectiveDate);
             if (runResult.error) {
-                return { valid: false, error: `Run failed (iteration ${iteration}): ${runResult.error}` };
+                return {
+                    valid: false,
+                    issues: [{
+                        code: 'internal_error',
+                        message: `VM run failed at iteration ${iteration}`,
+                    }],
+                    error: `Run failed (iteration ${iteration}): ${runResult.error}`,
+                };
             }
 
             const resultSchema = runResult.result!;
 
-            // Count visible fields after run
-            const currentVisibleCount = countVisibleFields(resultSchema);
+            // Get visible field IDs after run
+            const currentVisibleIds = getVisibleFieldIds(resultSchema);
 
-            // Check for convergence
-            if (currentVisibleCount === previousVisibleCount) {
-                // Converged - now validate the final state
-                const [valid, error] = validateFinalState(parsedNewSchema, resultSchema);
-                return { valid, error };
+            // Check for convergence using set comparison
+            if (currentVisibleIds === previousVisibleIds) {
+                // Converged - now validate the final state and return full result
+                return validateFinalState(parsedNewSchema, resultSchema);
             }
 
-            previousVisibleCount = currentVisibleCount;
+            previousVisibleIds = currentVisibleIds;
             currentSchema = resultSchema;
         }
 
-        return { valid: false, error: `Verification did not converge after ${maxIterations} iterations` };
+        return {
+            valid: false,
+            issues: [{
+                code: 'convergence_failed',
+                message: `Document did not converge after ${maxIterations} iterations`,
+            }],
+        };
     } catch (error) {
-        return { valid: false, error: String(error) };
+        return {
+            valid: false,
+            issues: [{
+                code: 'internal_error',
+                message: `Unexpected error during verification`,
+            }],
+            error: String(error),
+        };
     }
 }

@@ -7,18 +7,20 @@ import (
 
 // Engine holds state during execution of a schema.
 type Engine struct {
-	schema         *Schema
-	errors         []ValidationError
-	fieldsSet      map[string]string // tracks which fields were set by which rule (cycle detection)
-	currentElement any               // current element context for some/all/none operators
+	schema            *Schema
+	errors            []ValidationError
+	fieldsSet         map[string]string // tracks which fields were set by which rule (cycle detection)
+	currentElement    any               // current element context for some/all/none operators
+	derivedInProgress map[string]bool   // cycle detection for derived fields
 }
 
 // NewEngine creates an engine for the given schema.
 func NewEngine(schema *Schema) *Engine {
 	return &Engine{
-		schema:    schema,
-		errors:    make([]ValidationError, 0),
-		fieldsSet: make(map[string]string),
+		schema:            schema,
+		errors:            make([]ValidationError, 0),
+		fieldsSet:         make(map[string]string),
+		derivedInProgress: make(map[string]bool),
 	}
 }
 
@@ -72,8 +74,13 @@ func (e *Engine) getVar(path string) any {
 	// First, check derived state (derived values take precedence)
 	if e.schema.StateModel != nil && e.schema.StateModel.Derived != nil {
 		if derived, ok := e.schema.StateModel.Derived[parts[0]]; ok {
-			// Evaluate the derived expression
+			if e.derivedInProgress[parts[0]] {
+				e.addError("", "", ErrCycleDetected, fmt.Sprintf("Circular dependency detected in derived field '%s'", parts[0]), "")
+				return nil
+			}
+			e.derivedInProgress[parts[0]] = true
 			result := e.resolve(derived.Eval)
+			delete(e.derivedInProgress, parts[0])
 			if len(parts) == 1 {
 				return result
 			}
@@ -92,7 +99,7 @@ func (e *Engine) getVar(path string) any {
 
 	// Variable not found - add error (unless we're in a some/all/none context)
 	if e.currentElement == nil {
-		e.addError("", "", fmt.Sprintf("Undefined variable '%s' in logic expression", parts[0]), "")
+		e.addError("", "", ErrRuntimeWarning, fmt.Sprintf("Undefined variable '%s' in logic expression", parts[0]), "")
 	}
 
 	return nil
@@ -165,10 +172,11 @@ func (e *Engine) resolveArgs(args any, expected int) []any {
 }
 
 // addError appends a validation error to the engine's error list.
-func (e *Engine) addError(fieldID, ruleID, message, lawRef string) {
+func (e *Engine) addError(fieldID, ruleID string, kind ErrorKind, message, lawRef string) {
 	e.errors = append(e.errors, ValidationError{
 		FieldID: fieldID,
 		RuleID:  ruleID,
+		Kind:    kind,
 		Message: message,
 		LawRef:  lawRef,
 	})

@@ -3,7 +3,7 @@
  * Validates types, constraints, and required fields.
  */
 
-import type { EvalState, Definition, ValidationError, DocStatus } from './types.js';
+import type { EvalState, Definition, ErrorKind, DocStatus, Action } from './types.js';
 import { toFloat, parseDate } from './operators.js';
 
 /**
@@ -13,12 +13,14 @@ export function addError(
     state: EvalState,
     fieldId: string,
     ruleId: string,
+    kind: ErrorKind,
     message: string,
     lawRef?: string
 ): void {
     state.errors.push({
         field_id: fieldId || undefined,
         rule_id: ruleId || undefined,
+        kind,
         message,
         law_ref: lawRef || undefined,
     });
@@ -44,10 +46,10 @@ function validateNumericConstraints(
     def: Definition
 ): void {
     if (def.min !== undefined && value < def.min) {
-        addError(state, id, '', `Field '${id}' value ${value.toFixed(2)} is below minimum ${def.min.toFixed(2)}`);
+        addError(state, id, '', 'constraint_violation', `Field '${id}' value ${value.toFixed(2)} is below minimum ${def.min.toFixed(2)}`);
     }
     if (def.max !== undefined && value > def.max) {
-        addError(state, id, '', `Field '${id}' value ${value.toFixed(2)} exceeds maximum ${def.max.toFixed(2)}`);
+        addError(state, id, '', 'constraint_violation', `Field '${id}' value ${value.toFixed(2)} exceeds maximum ${def.max.toFixed(2)}`);
     }
 }
 
@@ -61,16 +63,16 @@ function validateStringConstraints(
     def: Definition
 ): void {
     if (def.min_length !== undefined && value.length < def.min_length) {
-        addError(state, id, '', `Field '${id}' is too short (minimum ${def.min_length} characters)`);
+        addError(state, id, '', 'constraint_violation', `Field '${id}' is too short (minimum ${def.min_length} characters)`);
     }
     if (def.max_length !== undefined && value.length > def.max_length) {
-        addError(state, id, '', `Field '${id}' is too long (maximum ${def.max_length} characters)`);
+        addError(state, id, '', 'constraint_violation', `Field '${id}' is too long (maximum ${def.max_length} characters)`);
     }
     if (def.pattern) {
         try {
             const regex = new RegExp(def.pattern);
             if (!regex.test(value)) {
-                addError(state, id, '', `Field '${id}' does not match required pattern`);
+                addError(state, id, '', 'constraint_violation', `Field '${id}' does not match required pattern`);
             }
         } catch {
             // Invalid regex pattern, skip validation
@@ -80,14 +82,21 @@ function validateStringConstraints(
 
 /**
  * Validate a single definition's type and constraints.
+ * Array values are allowed — the declared type describes the element type,
+ * used by collection operators (some/all/none). Scalar validation is skipped for arrays.
  */
 function validateType(state: EvalState, id: string, def: Definition): void {
     const value = def.value;
 
+    // Skip scalar validation for array values (used with some/all/none operators)
+    if (Array.isArray(value)) {
+        return;
+    }
+
     switch (def.type) {
         case 'string': {
             if (typeof value !== 'string') {
-                addError(state, id, '', `Field '${id}' must be a string`);
+                addError(state, id, '', 'type_mismatch', `Field '${id}' must be a string`);
                 return;
             }
             validateStringConstraints(state, id, value, def);
@@ -98,7 +107,7 @@ function validateType(state: EvalState, id: string, def: Definition): void {
         case 'currency': {
             const [numVal, ok] = toFloat(value);
             if (!ok) {
-                addError(state, id, '', `Field '${id}' must be a number`);
+                addError(state, id, '', 'type_mismatch', `Field '${id}' must be a number`);
                 return;
             }
             validateNumericConstraints(state, id, numVal, def);
@@ -107,25 +116,25 @@ function validateType(state: EvalState, id: string, def: Definition): void {
 
         case 'boolean': {
             if (typeof value !== 'boolean') {
-                addError(state, id, '', `Field '${id}' must be a boolean`);
+                addError(state, id, '', 'type_mismatch', `Field '${id}' must be a boolean`);
             }
             break;
         }
 
         case 'select': {
             if (typeof value !== 'string') {
-                addError(state, id, '', `Field '${id}' must be a string`);
+                addError(state, id, '', 'type_mismatch', `Field '${id}' must be a string`);
                 return;
             }
             if (!isValidOption(value, def.options)) {
-                addError(state, id, '', `Field '${id}' value '${value}' is not a valid option`);
+                addError(state, id, '', 'constraint_violation', `Field '${id}' value '${value}' is not a valid option`);
             }
             break;
         }
 
         case 'attestation': {
             if (typeof value !== 'boolean') {
-                addError(state, id, '', `Attestation '${id}' must be a boolean`);
+                addError(state, id, '', 'type_mismatch', `Attestation '${id}' must be a boolean`);
             }
             break;
         }
@@ -133,7 +142,7 @@ function validateType(state: EvalState, id: string, def: Definition): void {
         case 'date': {
             const [, ok] = parseDate(value);
             if (!ok) {
-                addError(state, id, '', `Field '${id}' must be a valid date`);
+                addError(state, id, '', 'type_mismatch', `Field '${id}' must be a valid date`);
             }
             break;
         }
@@ -152,10 +161,10 @@ export function validateDefinitions(state: EvalState): void {
         // Check required fields
         if (def.required) {
             if (def.value === undefined || def.value === null) {
-                addError(state, id, '', `Required field '${id}' is missing`);
+                addError(state, id, '', 'missing_required', `Required field '${id}' is missing`);
             } else if ((def.type === 'string' || def.type === 'select') && def.value === '') {
                 // Empty string is also considered "missing" for required string/select fields
-                addError(state, id, '', `Required field '${id}' is missing`);
+                addError(state, id, '', 'missing_required', `Required field '${id}' is missing`);
             }
         }
 
@@ -169,14 +178,17 @@ export function validateDefinitions(state: EvalState): void {
 /**
  * Check attestations for required signatures.
  */
-export function checkAttestations(state: EvalState, applyAction: (action: any, ruleId: string, lawRef: string) => void): void {
+export function checkAttestations(
+    state: EvalState,
+    applyAction: (action: Action, ruleId: string, lawRef: string) => void
+): void {
     // Check legacy attestations in definitions (simple type: attestation)
     for (const [id, def] of Object.entries(state.schema.definitions)) {
         if (!def || def.type !== 'attestation') {
             continue;
         }
         if (def.required && def.value !== true) {
-            addError(state, id, '', `Required attestation '${id}' not confirmed`);
+            addError(state, id, '', 'attestation_incomplete', `Required attestation '${id}' not confirmed`);
         }
     }
 
@@ -198,38 +210,28 @@ export function checkAttestations(state: EvalState, applyAction: (action: any, r
         // Validate required attestations
         if (att.required) {
             if (!att.signed) {
-                addError(state, id, '', `Required attestation '${id}' not signed`, att.law_ref);
+                addError(state, id, '', 'attestation_incomplete', `Required attestation '${id}' not signed`, att.law_ref);
             } else if (!att.evidence || !att.evidence.provider_audit_id) {
-                addError(state, id, '', `Attestation '${id}' signed but missing evidence`, att.law_ref);
+                addError(state, id, '', 'attestation_incomplete', `Attestation '${id}' signed but missing evidence`, att.law_ref);
             }
         }
     }
 }
 
 /**
- * Determine document status based on validation errors.
+ * Determine document status based on ErrorKind.
  */
 export function determineStatus(state: EvalState): DocStatus {
-    let hasTypeErrors = false;
-    let hasMissingRequired = false;
-    let hasMissingAttestations = false;
-
     for (const err of state.errors) {
-        const msg = err.message;
-        if (msg.includes('must be a')) {
-            hasTypeErrors = true;
-        } else if (msg.includes('missing') || msg.includes('Required field')) {
-            hasMissingRequired = true;
-        } else if (msg.includes('attestation')) {
-            hasMissingAttestations = true;
+        if (err.kind === 'type_mismatch') return 'INVALID';
+    }
+    for (const err of state.errors) {
+        if (err.kind === 'missing_required' || err.kind === 'attestation_incomplete') {
+            return 'INCOMPLETE';
         }
     }
-
-    if (hasTypeErrors) {
-        return 'INVALID';
-    }
-    if (hasMissingRequired || hasMissingAttestations) {
-        return 'INCOMPLETE';
+    for (const err of state.errors) {
+        if (err.kind === 'constraint_violation') return 'INVALID';
     }
     return 'READY';
 }

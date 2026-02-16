@@ -190,3 +190,27 @@ RPG character with class-based abilities and stat constraints.
 - Class selection changes stat constraints
 - Derived `health` and `mana` computed from stats
 - `ui_class` for styling hints
+
+---
+
+## Edge Case Examples
+
+The `examples/` directory contains additional schemas testing edge cases:
+
+| File | What it tests |
+|------|---------------|
+| `temporal_tax_reform.json` | Temporal routing with 3 versioned rule sets |
+| `competing_rules.json` | Two rules setting the same field (cycle detection) |
+| `chained_derived.json` | 7-level chained derived computation |
+| `visibility_edge_cases.json` | `visible: false` on load, conditional visibility |
+| `null_arithmetic.json` | Null propagation, division by zero |
+| `collection_operators.json` | `some`/`all`/`none`/`in` operators with arrays |
+| `dynamic_constraints.json` | `ui_modify` changing min/max dynamically |
+| `falsy_values.json` | Preservation of `false`, `0`, `""` values |
+| `pattern_validation.json` | Regex patterns, length constraints |
+
+Run any example through the CLI:
+
+```bash
+./tenet run -date 2025-06-15 -file examples/temporal_tax_reform.json
+```

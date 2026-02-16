@@ -106,11 +106,16 @@ Rules without a `logic_version` are **always enabled**:
 The `Verify()` function replays logic to prove transformations are legal:
 
 ```go
-// Prove that newJSON was derived from oldJSON
-valid, err := tenet.Verify(newJSON, oldJSON)
+// Prove that completedJSON was derived from baseSchema
+vr := tenet.Verify(completedJSON, baseSchemaJSON)
+if !vr.Valid {
+    for _, issue := range vr.Issues {
+        fmt.Printf("[%s] %s: %s\n", issue.Code, issue.FieldID, issue.Message)
+    }
+}
 ```
 
-This re-runs `oldJSON` through the VM and compares the result with `newJSON`. If values match, the transformation is valid.
+This re-runs the base schema through the VM turn-by-turn, feeding in values from the completed document, and compares computed values. If everything matches, the transformation is valid. See [Verification Algorithm](08-verification.md) for details.
 
 ---
 

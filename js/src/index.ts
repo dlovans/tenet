@@ -5,105 +5,27 @@
  * Works in both browser and Node.js environments with no WASM dependencies.
  */
 
-// Type definitions
-export interface TenetResult {
-    result?: TenetSchema;
-    error?: string;
-}
-
-export interface TenetVerifyResult {
-    valid: boolean;
-    error?: string;
-}
-
-export interface Evidence {
-    provider_audit_id?: string;
-    timestamp?: string;
-    signer_id?: string;
-    logic_version?: string;
-}
-
-export interface Attestation {
-    statement: string;
-    law_ref?: string;
-    required_role?: string;
-    provider?: string;
-    required?: boolean;
-    signed?: boolean;
-    evidence?: Evidence;
-    on_sign?: Action;
-}
-
-export interface TenetSchema {
-    protocol?: string;
-    schema_id?: string;
-    version?: string;
-    valid_from?: string;
-    definitions: Record<string, Definition>;
-    logic_tree?: Rule[];
-    temporal_map?: TemporalBranch[];
-    state_model?: StateModel;
-    errors?: ValidationError[];
-    status?: 'READY' | 'INCOMPLETE' | 'INVALID';
-    attestations?: Record<string, Attestation>;
-}
-
-export interface Definition {
-    type: 'string' | 'number' | 'boolean' | 'select' | 'date' | 'attestation' | 'currency';
-    value?: unknown;
-    options?: string[];
-    label?: string;
-    required?: boolean;
-    readonly?: boolean;
-    visible?: boolean;
-    min?: number;
-    max?: number;
-    step?: number;
-    min_length?: number;
-    max_length?: number;
-    pattern?: string;
-    ui_class?: string;
-    ui_message?: string;
-}
-
-export interface Rule {
-    id: string;
-    law_ref?: string;
-    logic_version?: string;
-    when: Record<string, unknown>;
-    then: Action;
-    disabled?: boolean;
-}
-
-export interface Action {
-    set?: Record<string, unknown>;
-    ui_modify?: Record<string, unknown>;
-    error_msg?: string;
-}
-
-export interface TemporalBranch {
-    valid_range: [string | null, string | null];
-    logic_version: string;
-    status: 'ACTIVE' | 'ARCHIVED';
-}
-
-export interface StateModel {
-    inputs: string[];
-    derived: Record<string, DerivedDef>;
-}
-
-export interface DerivedDef {
-    eval: Record<string, unknown>;
-}
-
-export interface ValidationError {
-    field_id?: string;
-    rule_id?: string;
-    message: string;
-    law_ref?: string;
-}
+// Re-export public types from the single source of truth
+export type {
+    TenetSchema,
+    TenetResult,
+    TenetVerifyResult,
+    VerifyIssue,
+    VerifyIssueCode,
+    Definition,
+    Rule,
+    Action,
+    TemporalBranch,
+    StateModel,
+    DerivedDef,
+    ValidationError,
+    Evidence,
+    Attestation,
+    ErrorKind,
+} from './core/types.js';
 
 // Import core engine functions
+import type { TenetSchema, TenetResult, TenetVerifyResult } from './core/types.js';
 import { run as coreRun, verify as coreVerify } from './core/engine.js';
 
 /**

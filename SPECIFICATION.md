@@ -578,7 +578,7 @@ Rules reference their version:
 ## Go
 
 ```go
-import "github.com/tenet-vm/tenet/pkg/tenet"
+import "github.com/dlovans/tenet/pkg/tenet"
 
 // Execute schema
 result, err := tenet.Run(jsonString, time.Now())
@@ -590,7 +590,7 @@ valid, err := tenet.Verify(completedDoc, baseSchema)
 ## JavaScript
 
 ```javascript
-import { init, run, verify, lint } from '@tenet-vm/tenet';
+import { init, run, verify, lint } from '@dlovans/tenet-core';
 
 // Initialize WASM (required for run/verify)
 await init('./tenet.wasm');

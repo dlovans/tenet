@@ -1,0 +1,109 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "visibility_edge_cases",
+  "version": "2026.01",
+
+  "definitions": {
+    "account_type": {
+      "type": "select",
+      "value": "business",
+      "label": "Account Type",
+      "required": true,
+      "options": ["personal", "business", "nonprofit"]
+    },
+    "has_employees": {
+      "type": "boolean",
+      "value": true,
+      "label": "Do you have employees?",
+      "visible": false
+    },
+    "employee_count": {
+      "type": "number",
+      "value": null,
+      "label": "Number of Employees",
+      "visible": false,
+      "required": false,
+      "min": 1,
+      "max": 100000
+    },
+    "ein_number": {
+      "type": "string",
+      "value": null,
+      "label": "Employer Identification Number",
+      "visible": false,
+      "required": false,
+      "pattern": "^\\d{2}-\\d{7}$"
+    },
+    "nonprofit_id": {
+      "type": "string",
+      "value": null,
+      "label": "501(c)(3) Determination Letter ID",
+      "visible": false,
+      "required": false,
+      "min_length": 5
+    },
+    "personal_ssn_last4": {
+      "type": "string",
+      "value": null,
+      "label": "Last 4 of SSN",
+      "visible": false,
+      "required": false,
+      "min_length": 4,
+      "max_length": 4,
+      "pattern": "^\\d{4}$"
+    },
+    "account_status": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "show_business_fields",
+      "when": {"==": [{"var": "account_type"}, "business"]},
+      "then": {
+        "ui_modify": {
+          "has_employees": {"visible": true},
+          "ein_number": {"visible": true, "required": true}
+        },
+        "set": {"account_status": "business_pending"}
+      }
+    },
+    {
+      "id": "show_employee_count",
+      "when": {"and": [
+        {"==": [{"var": "account_type"}, "business"]},
+        {"==": [{"var": "has_employees"}, true]}
+      ]},
+      "then": {
+        "ui_modify": {
+          "employee_count": {"visible": true, "required": true}
+        }
+      }
+    },
+    {
+      "id": "show_nonprofit_fields",
+      "when": {"==": [{"var": "account_type"}, "nonprofit"]},
+      "then": {
+        "ui_modify": {
+          "nonprofit_id": {"visible": true, "required": true},
+          "ein_number": {"visible": true, "required": true}
+        },
+        "set": {"account_status": "nonprofit_review"}
+      }
+    },
+    {
+      "id": "show_personal_fields",
+      "when": {"==": [{"var": "account_type"}, "personal"]},
+      "then": {
+        "ui_modify": {
+          "personal_ssn_last4": {"visible": true, "required": true}
+        },
+        "set": {"account_status": "personal_active"}
+      }
+    }
+  ]
+}

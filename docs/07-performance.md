@@ -70,9 +70,11 @@ tenet lint -file schema.json
 
 2. **Memory allocations** — ~300 allocations per run. Acceptable for validation, not for per-frame game loops.
 
-3. **WASM overhead** — Browser WASM is ~2-3x slower than native Go. Still sub-millisecond.
+3. **TypeScript package** — Pure TypeScript, no WASM overhead. Performance is native JS engine speed.
 
 4. **Cycle detection** — Adds ~2 allocations per `set` operation. Negligible overhead.
+
+5. **Panic recovery** — Go `Run()` and `Verify()` include `defer recover()` for crash safety. Zero overhead when no panic occurs.
 
 ## Best Practices
 

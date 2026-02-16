@@ -1,7 +1,6 @@
 package tenet
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -33,7 +32,6 @@ func TestVerifyTurnBased(t *testing.T) {
 	}`
 
 	t.Run("valid small business path", func(t *testing.T) {
-		// User entered revenue=3000, filled small_biz_field, got tax_bracket=low
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 3000, "visible": true},
@@ -44,17 +42,22 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if err != nil {
-			t.Fatalf("Verify failed: %v", err)
+		result := Verify(completedDoc, baseSchema)
+		if result.Error != "" {
+			t.Fatalf("Verify error: %s", result.Error)
 		}
-		if !valid {
-			t.Fatal("Expected valid, got invalid")
+		if !result.Valid {
+			t.Fatalf("Expected valid, got issues: %+v", result.Issues)
+		}
+		if result.Status != StatusReady {
+			t.Fatalf("Expected status READY, got %s", result.Status)
+		}
+		if result.Schema == nil {
+			t.Fatal("Expected schema in result")
 		}
 	})
 
 	t.Run("valid large business path", func(t *testing.T) {
-		// User entered revenue=10000, filled large_biz_field, got tax_bracket=high
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 10000, "visible": true},
@@ -65,17 +68,16 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if err != nil {
-			t.Fatalf("Verify failed: %v", err)
+		result := Verify(completedDoc, baseSchema)
+		if result.Error != "" {
+			t.Fatalf("Verify error: %s", result.Error)
 		}
-		if !valid {
-			t.Fatal("Expected valid, got invalid")
+		if !result.Valid {
+			t.Fatalf("Expected valid, got issues: %+v", result.Issues)
 		}
 	})
 
 	t.Run("tampered computed value", func(t *testing.T) {
-		// User claims tax_bracket=low but revenue=10000 should give high
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 10000, "visible": true},
@@ -85,17 +87,29 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if valid {
+		result := Verify(completedDoc, baseSchema)
+		if result.Valid {
 			t.Fatal("Expected invalid due to tampered computed value")
 		}
-		if err == nil || !strings.Contains(err.Error(), "mismatch") {
-			t.Fatalf("Expected mismatch error, got: %v", err)
+		// Should have a computed_mismatch issue for tax_bracket
+		found := false
+		for _, issue := range result.Issues {
+			if issue.Code == VerifyComputedMismatch && issue.FieldID == "tax_bracket" {
+				found = true
+				if issue.Expected != "high" {
+					t.Fatalf("Expected 'high', got expected=%v", issue.Expected)
+				}
+				if issue.Claimed != "low" {
+					t.Fatalf("Expected claimed 'low', got claimed=%v", issue.Claimed)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("Expected computed_mismatch issue for tax_bracket, got: %+v", result.Issues)
 		}
 	})
 
 	t.Run("wrong branch - claims field that shouldnt be visible", func(t *testing.T) {
-		// User claims they filled large_biz_field but revenue=3000 should show small_biz_field
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 3000, "visible": true},
@@ -106,16 +120,11 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		// This should fail because large_biz_field shouldnt be visible at revenue=3000
-		valid, err := Verify(completedDoc, baseSchema)
-		// The verification will detect that the path is wrong because
-		// it replays from base and sees different visible fields
-		t.Logf("Result: valid=%v, err=%v", valid, err)
-		// Note: Current impl might not catch this specific case - documenting behavior
+		result := Verify(completedDoc, baseSchema)
+		t.Logf("Result: valid=%v, issues=%+v", result.Valid, result.Issues)
 	})
 
 	t.Run("status tampering", func(t *testing.T) {
-		// User claims READY but missing required field
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 3000, "visible": true},
@@ -125,18 +134,23 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if valid {
-			t.Fatal("Expected invalid due to status tampering (claimed READY but field empty)")
+		result := Verify(completedDoc, baseSchema)
+		if result.Valid {
+			t.Fatal("Expected invalid due to status tampering")
 		}
-		if err == nil {
-			t.Fatal("Expected error for status mismatch")
+		// Should have a status_mismatch issue
+		found := false
+		for _, issue := range result.Issues {
+			if issue.Code == VerifyStatusMismatch {
+				found = true
+			}
 		}
-		t.Logf("Status tamper caught: %v", err)
+		if !found {
+			t.Fatalf("Expected status_mismatch issue, got: %+v", result.Issues)
+		}
 	})
 
 	t.Run("renamed field - field_a renamed to field_x", func(t *testing.T) {
-		// User renamed small_biz_field to fake_field
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 3000, "visible": true},
@@ -146,14 +160,11 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		t.Logf("Renamed field result: valid=%v, err=%v", valid, err)
-		// The verification should catch this because small_biz_field is missing
-		// and fake_renamed_field doesn't exist in base schema
+		result := Verify(completedDoc, baseSchema)
+		t.Logf("Renamed field result: valid=%v, issues=%+v", result.Valid, result.Issues)
 	})
 
 	t.Run("extra field that doesnt exist in base", func(t *testing.T) {
-		// User added a field that doesn't exist in base schema
 		completedDoc := `{
 			"definitions": {
 				"revenue": {"type": "number", "value": 3000, "visible": true},
@@ -164,14 +175,20 @@ func TestVerifyTurnBased(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if valid {
+		result := Verify(completedDoc, baseSchema)
+		if result.Valid {
 			t.Fatal("Expected invalid due to injected field")
 		}
-		if err == nil || !strings.Contains(err.Error(), "unknown field") {
-			t.Fatalf("Expected unknown field error, got: %v", err)
+		// Should have an unknown_field issue
+		found := false
+		for _, issue := range result.Issues {
+			if issue.Code == VerifyUnknownField && issue.FieldID == "INJECTED_FIELD" {
+				found = true
+			}
 		}
-		t.Logf("Extra field caught: %v", err)
+		if !found {
+			t.Fatalf("Expected unknown_field issue for INJECTED_FIELD, got: %+v", result.Issues)
+		}
 	})
 }
 
@@ -209,12 +226,12 @@ func TestVerifyWithAttestations(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if err != nil {
-			t.Fatalf("Verify failed: %v", err)
+		result := Verify(completedDoc, baseSchema)
+		if result.Error != "" {
+			t.Fatalf("Verify error: %s", result.Error)
 		}
-		if !valid {
-			t.Fatal("Expected valid")
+		if !result.Valid {
+			t.Fatalf("Expected valid, got issues: %+v", result.Issues)
 		}
 	})
 
@@ -233,19 +250,24 @@ func TestVerifyWithAttestations(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if valid {
+		result := Verify(completedDoc, baseSchema)
+		if result.Valid {
 			t.Fatal("Expected invalid due to missing evidence")
 		}
-		if err == nil || !strings.Contains(err.Error(), "missing evidence") {
-			t.Fatalf("Expected missing evidence error, got: %v", err)
+		// Should have attestation evidence/timestamp issues
+		foundEvidence := false
+		for _, issue := range result.Issues {
+			if issue.Code == VerifyAttestationNoEvidence && issue.FieldID == "officer_sign" {
+				foundEvidence = true
+			}
+		}
+		if !foundEvidence {
+			t.Fatalf("Expected attestation_no_evidence issue, got: %+v", result.Issues)
 		}
 	})
 }
 
-// Helper to run schema and check convergence
 func TestVerifyConvergence(t *testing.T) {
-	// Schema with cascading field reveals
 	baseSchema := `{
 		"definitions": {
 			"step1": {"type": "string", "value": null, "visible": true},
@@ -276,12 +298,12 @@ func TestVerifyConvergence(t *testing.T) {
 			"status": "READY"
 		}`
 
-		valid, err := Verify(completedDoc, baseSchema)
-		if err != nil {
-			t.Fatalf("Verify failed: %v", err)
+		result := Verify(completedDoc, baseSchema)
+		if result.Error != "" {
+			t.Fatalf("Verify error: %s", result.Error)
 		}
-		if !valid {
-			t.Fatal("Expected valid for cascading reveals")
+		if !result.Valid {
+			t.Fatalf("Expected valid, got issues: %+v", result.Issues)
 		}
 	})
 }

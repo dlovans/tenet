@@ -3,6 +3,8 @@ package tenet
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -11,19 +13,30 @@ import (
 // Returns the transformed JSON with computed state, errors, and status.
 //
 // This is the "Transformer" - it takes raw input and returns a fully evaluated document.
-func Run(jsonText string, date time.Time) (string, error) {
+// Panic-safe: recovers from any unexpected panic and returns it as an error.
+func Run(jsonText string, date time.Time) (result string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			result = ""
+			err = fmt.Errorf("internal error: %v", r)
+		}
+	}()
+
 	// 1. Unmarshal
 	var schema Schema
 	if err := json.Unmarshal([]byte(jsonText), &schema); err != nil {
 		return "", fmt.Errorf("unmarshal: %w", err)
 	}
 
+	if schema.Definitions == nil {
+		schema.Definitions = make(map[string]*Definition)
+	}
+
 	// Initialize default visibility for definitions
 	for _, def := range schema.Definitions {
-		if def != nil {
-			// Default visible to true if not explicitly set
-			// (Go zero value is false, so we need to handle this)
-			def.Visible = true
+		if def != nil && def.Visible == nil {
+			t := true
+			def.Visible = &t
 		}
 	}
 
@@ -65,7 +78,22 @@ func Run(jsonText string, date time.Time) (string, error) {
 // Optional maxIterations parameter (default: 100) limits the replay iterations.
 //
 // This is the "Auditor" - it proves the transformation was legal by replaying the journey.
-func Verify(newJson, baseSchemaJson string, maxIter ...int) (bool, error) {
+// Returns a structured VerifyResult with all issues found (not just the first).
+// Panic-safe: recovers from any unexpected panic and returns it as an internal_error issue.
+func Verify(newJson, baseSchemaJson string, maxIter ...int) (vr VerifyResult) {
+	defer func() {
+		if r := recover(); r != nil {
+			vr = VerifyResult{
+				Valid: false,
+				Issues: []VerifyIssue{{
+					Code:    VerifyInternalError,
+					Message: fmt.Sprintf("internal panic: %v", r),
+				}},
+				Error: fmt.Sprintf("internal panic: %v", r),
+			}
+		}
+	}()
+
 	maxIterations := 100
 	if len(maxIter) > 0 && maxIter[0] > 0 {
 		maxIterations = maxIter[0]
@@ -74,7 +102,14 @@ func Verify(newJson, baseSchemaJson string, maxIter ...int) (bool, error) {
 	// Parse both documents
 	var newSchema Schema
 	if err := json.Unmarshal([]byte(newJson), &newSchema); err != nil {
-		return false, fmt.Errorf("unmarshal newJson: %w", err)
+		return VerifyResult{
+			Valid: false,
+			Issues: []VerifyIssue{{
+				Code:    VerifyInternalError,
+				Message: fmt.Sprintf("failed to parse submitted document: %v", err),
+			}},
+			Error: fmt.Sprintf("unmarshal newJson: %v", err),
+		}
 	}
 
 	// Extract effective date from newJson
@@ -87,13 +122,20 @@ func Verify(newJson, baseSchemaJson string, maxIter ...int) (bool, error) {
 
 	// Start with base schema
 	currentJson := baseSchemaJson
-	previousVisibleCount := -1
+	previousVisibleSet := ""
 
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// Parse current state
 		var currentSchema Schema
 		if err := json.Unmarshal([]byte(currentJson), &currentSchema); err != nil {
-			return false, fmt.Errorf("unmarshal current (iteration %d): %w", iteration, err)
+			return VerifyResult{
+				Valid: false,
+				Issues: []VerifyIssue{{
+					Code:    VerifyInternalError,
+					Message: fmt.Sprintf("failed to parse schema at iteration %d", iteration),
+				}},
+				Error: fmt.Sprintf("unmarshal current (iteration %d): %v", iteration, err),
+			}
 		}
 
 		// Count visible editable fields before copying
@@ -122,66 +164,100 @@ func Verify(newJson, baseSchemaJson string, maxIter ...int) (bool, error) {
 		// Run the schema
 		modifiedJson, err := json.Marshal(currentSchema)
 		if err != nil {
-			return false, fmt.Errorf("marshal (iteration %d): %w", iteration, err)
+			return VerifyResult{
+				Valid: false,
+				Issues: []VerifyIssue{{
+					Code:    VerifyInternalError,
+					Message: fmt.Sprintf("failed to serialize schema at iteration %d", iteration),
+				}},
+				Error: fmt.Sprintf("marshal (iteration %d): %v", iteration, err),
+			}
 		}
 
 		resultJson, err := Run(string(modifiedJson), effectiveDate)
 		if err != nil {
-			return false, fmt.Errorf("run failed (iteration %d): %w", iteration, err)
+			return VerifyResult{
+				Valid: false,
+				Issues: []VerifyIssue{{
+					Code:    VerifyInternalError,
+					Message: fmt.Sprintf("VM run failed at iteration %d", iteration),
+				}},
+				Error: fmt.Sprintf("run failed (iteration %d): %v", iteration, err),
+			}
 		}
 
 		// Parse result
 		var resultSchema Schema
 		if err := json.Unmarshal([]byte(resultJson), &resultSchema); err != nil {
-			return false, fmt.Errorf("unmarshal result (iteration %d): %w", iteration, err)
+			return VerifyResult{
+				Valid: false,
+				Issues: []VerifyIssue{{
+					Code:    VerifyInternalError,
+					Message: fmt.Sprintf("failed to parse VM result at iteration %d", iteration),
+				}},
+				Error: fmt.Sprintf("unmarshal result (iteration %d): %v", iteration, err),
+			}
 		}
 
-		// Count visible fields after run
-		currentVisibleCount := countVisibleFields(&resultSchema)
+		// Build sorted set of visible field IDs for convergence check
+		currentVisibleSet := visibleFieldSet(&resultSchema)
 
 		// Check for convergence
-		if currentVisibleCount == previousVisibleCount {
-			// Converged - now validate the final state
+		if currentVisibleSet == previousVisibleSet {
+			// Converged - now validate the final state and return full result
 			return validateFinalState(&newSchema, &resultSchema)
 		}
 
-		previousVisibleCount = currentVisibleCount
+		previousVisibleSet = currentVisibleSet
 		currentJson = resultJson
 	}
 
-	return false, fmt.Errorf("verification did not converge after %d iterations", maxIterations)
+	return VerifyResult{
+		Valid: false,
+		Issues: []VerifyIssue{{
+			Code:    VerifyConvergenceFailed,
+			Message: fmt.Sprintf("document did not converge after %d iterations", maxIterations),
+		}},
+	}
 }
 
 // getVisibleEditableFields returns field IDs that are visible and not readonly
 func getVisibleEditableFields(schema *Schema) map[string]bool {
 	result := make(map[string]bool)
 	for id, def := range schema.Definitions {
-		if def != nil && def.Visible && !def.Readonly {
+		if def != nil && def.Visible != nil && *def.Visible && !def.Readonly {
 			result[id] = true
 		}
 	}
 	return result
 }
 
-// countVisibleFields returns the number of visible fields
-func countVisibleFields(schema *Schema) int {
-	count := 0
-	for _, def := range schema.Definitions {
-		if def != nil && def.Visible {
-			count++
+// visibleFieldSet returns a sorted string of visible field IDs for convergence checking.
+func visibleFieldSet(schema *Schema) string {
+	var ids []string
+	for id, def := range schema.Definitions {
+		if def != nil && def.Visible != nil && *def.Visible {
+			ids = append(ids, id)
 		}
 	}
-	return count
+	sort.Strings(ids)
+	return strings.Join(ids, ",")
 }
 
-// validateFinalState compares computed values and attestation fulfillment
-func validateFinalState(newSchema, resultSchema *Schema) (bool, error) {
+// validateFinalState compares computed values and attestation fulfillment.
+// Collects ALL issues instead of bailing on the first — the UI needs the complete picture.
+func validateFinalState(newSchema, resultSchema *Schema) VerifyResult {
 	engine := &Engine{}
+	var issues []VerifyIssue
 
 	// Check for unknown/injected fields in newSchema that don't exist in result
 	for id := range newSchema.Definitions {
 		if _, existsInResult := resultSchema.Definitions[id]; !existsInResult {
-			return false, fmt.Errorf("unknown field '%s' not in schema", id)
+			issues = append(issues, VerifyIssue{
+				Code:    VerifyUnknownField,
+				FieldID: id,
+				Message: fmt.Sprintf("field '%s' does not exist in the schema", id),
+			})
 		}
 	}
 
@@ -193,46 +269,79 @@ func validateFinalState(newSchema, resultSchema *Schema) (bool, error) {
 
 		newDef, ok := newSchema.Definitions[id]
 		if !ok {
-			return false, fmt.Errorf("computed field '%s' missing in submitted document", id)
+			issues = append(issues, VerifyIssue{
+				Code:     VerifyComputedMismatch,
+				FieldID:  id,
+				Message:  fmt.Sprintf("computed field '%s' is missing from the submitted document", id),
+				Expected: resultDef.Value,
+			})
+			continue
 		}
 
 		if !engine.compareEqual(newDef.Value, resultDef.Value) {
-			return false, fmt.Errorf("computed field '%s' mismatch: claimed %v, expected %v",
-				id, newDef.Value, resultDef.Value)
+			issues = append(issues, VerifyIssue{
+				Code:     VerifyComputedMismatch,
+				FieldID:  id,
+				Message:  fmt.Sprintf("computed field '%s' was modified", id),
+				Expected: resultDef.Value,
+				Claimed:  newDef.Value,
+			})
 		}
 	}
 
 	// Verify attestations are fulfilled
 	for id, resultAtt := range resultSchema.Attestations {
-		if resultAtt == nil {
+		if resultAtt == nil || !resultAtt.Required {
 			continue
 		}
 
 		newAtt, ok := newSchema.Attestations[id]
 		if !ok {
-			continue // Attestation not required in result
+			continue
 		}
 
-		if resultAtt.Required {
-			if !newAtt.Signed {
-				return false, fmt.Errorf("required attestation '%s' not signed", id)
-			}
-			if newAtt.Evidence == nil || newAtt.Evidence.ProviderAuditID == "" {
-				return false, fmt.Errorf("attestation '%s' missing evidence", id)
-			}
-			if newAtt.Evidence.Timestamp == "" {
-				return false, fmt.Errorf("attestation '%s' missing timestamp", id)
-			}
+		if !newAtt.Signed {
+			issues = append(issues, VerifyIssue{
+				Code:    VerifyAttestationUnsigned,
+				FieldID: id,
+				Message: fmt.Sprintf("required attestation '%s' has not been signed", id),
+			})
+			continue // No point checking evidence if unsigned
+		}
+
+		if newAtt.Evidence == nil || newAtt.Evidence.ProviderAuditID == "" {
+			issues = append(issues, VerifyIssue{
+				Code:    VerifyAttestationNoEvidence,
+				FieldID: id,
+				Message: fmt.Sprintf("attestation '%s' is signed but missing proof of signing", id),
+			})
+		}
+
+		if newAtt.Evidence == nil || newAtt.Evidence.Timestamp == "" {
+			issues = append(issues, VerifyIssue{
+				Code:    VerifyAttestationNoTimestamp,
+				FieldID: id,
+				Message: fmt.Sprintf("attestation '%s' is signed but missing a timestamp", id),
+			})
 		}
 	}
 
 	// Verify status matches
 	if newSchema.Status != resultSchema.Status {
-		return false, fmt.Errorf("status mismatch: claimed %s, expected %s",
-			newSchema.Status, resultSchema.Status)
+		issues = append(issues, VerifyIssue{
+			Code:     VerifyStatusMismatch,
+			Message:  "the document status does not match what was computed",
+			Expected: resultSchema.Status,
+			Claimed:  newSchema.Status,
+		})
 	}
 
-	return true, nil
+	return VerifyResult{
+		Valid:  len(issues) == 0,
+		Status: resultSchema.Status,
+		Issues: issues,
+		Schema: resultSchema,
+	}
 }
 
 // evaluateLogicTree processes all active rules in order.
@@ -274,7 +383,7 @@ func (e *Engine) applyAction(action *Action, ruleID, lawRef string) {
 
 	// Emit error if specified
 	if action.ErrorMsg != "" {
-		e.addError("", ruleID, action.ErrorMsg, lawRef)
+		e.addError("", ruleID, ErrConstraintViolation, action.ErrorMsg, lawRef)
 	}
 }
 
@@ -283,7 +392,7 @@ func (e *Engine) applyAction(action *Action, ruleID, lawRef string) {
 func (e *Engine) setDefinitionValue(key string, value any, ruleID string) {
 	// Cycle detection: check if this field was already set by a different rule
 	if prevRule, alreadySet := e.fieldsSet[key]; alreadySet && prevRule != ruleID {
-		e.addError(key, ruleID, fmt.Sprintf(
+		e.addError(key, ruleID, ErrCycleDetected, fmt.Sprintf(
 			"potential cycle: field '%s' set by rule '%s' and again by rule '%s'",
 			key, prevRule, ruleID), "")
 	}
@@ -292,10 +401,11 @@ func (e *Engine) setDefinitionValue(key string, value any, ruleID string) {
 	def, ok := e.schema.Definitions[key]
 	if !ok {
 		// Create new definition if it doesn't exist
+		t := true
 		e.schema.Definitions[key] = &Definition{
 			Type:    inferType(value),
 			Value:   value,
-			Visible: true,
+			Visible: &t,
 		}
 		return
 	}
@@ -317,7 +427,7 @@ func (e *Engine) applyUIModify(key string, mods any) {
 
 	// Apply visibility and metadata modifications
 	if visible, ok := modMap["visible"].(bool); ok {
-		def.Visible = visible
+		def.Visible = &visible
 	}
 	if uiClass, ok := modMap["ui_class"].(string); ok {
 		def.UIClass = uiClass
@@ -368,12 +478,21 @@ func (e *Engine) computeDerived() {
 		// Evaluate the expression
 		value := e.resolve(derivedDef.Eval)
 
-		// Store the computed value as a definition (readonly)
-		e.schema.Definitions[name] = &Definition{
-			Type:     inferType(value),
-			Value:    value,
-			Readonly: true,
-			Visible:  true,
+		if existing, ok := e.schema.Definitions[name]; ok && existing != nil {
+			existing.Value = value
+			existing.Readonly = true
+			if existing.Visible == nil {
+				t := true
+				existing.Visible = &t
+			}
+		} else {
+			t := true
+			e.schema.Definitions[name] = &Definition{
+				Type:     inferType(value),
+				Value:    value,
+				Readonly: true,
+				Visible:  &t,
+			}
 		}
 	}
 }
@@ -397,6 +516,6 @@ func inferType(value any) string {
 	case bool:
 		return "boolean"
 	default:
-		return "any"
+		return "string"
 	}
 }

@@ -1,0 +1,109 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "dynamic_constraints",
+  "version": "2026.01",
+
+  "definitions": {
+    "membership_level": {
+      "type": "select",
+      "value": "premium",
+      "label": "Membership Level",
+      "required": true,
+      "options": ["free", "basic", "premium", "enterprise"]
+    },
+    "transfer_amount": {
+      "type": "currency",
+      "value": 7500,
+      "label": "Transfer Amount ($)",
+      "required": true,
+      "min": 1,
+      "max": 1000
+    },
+    "recipient_email": {
+      "type": "string",
+      "value": "partner@company.com",
+      "label": "Recipient Email",
+      "required": true,
+      "pattern": "^[^@]+@[^@]+\\.[^@]+$"
+    },
+    "transfer_note": {
+      "type": "string",
+      "value": null,
+      "label": "Transfer Note (optional)",
+      "required": false,
+      "max_length": 100
+    },
+    "api_key": {
+      "type": "string",
+      "value": null,
+      "label": "API Key",
+      "visible": false,
+      "required": false
+    },
+    "daily_limit_remaining": {
+      "type": "currency",
+      "value": null,
+      "label": "Daily Limit Remaining ($)",
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "free_tier_limits",
+      "when": {"==": [{"var": "membership_level"}, "free"]},
+      "then": {
+        "ui_modify": {
+          "transfer_amount": {"min": 1, "max": 100},
+          "transfer_note": {"max_length": 50}
+        },
+        "set": {"daily_limit_remaining": 100}
+      }
+    },
+    {
+      "id": "basic_tier_limits",
+      "when": {"==": [{"var": "membership_level"}, "basic"]},
+      "then": {
+        "ui_modify": {
+          "transfer_amount": {"min": 1, "max": 5000},
+          "transfer_note": {"max_length": 200}
+        },
+        "set": {"daily_limit_remaining": 5000}
+      }
+    },
+    {
+      "id": "premium_tier_limits",
+      "when": {"==": [{"var": "membership_level"}, "premium"]},
+      "then": {
+        "ui_modify": {
+          "transfer_amount": {"min": 1, "max": 50000},
+          "transfer_note": {"max_length": 500}
+        },
+        "set": {"daily_limit_remaining": 50000}
+      }
+    },
+    {
+      "id": "enterprise_tier_limits",
+      "when": {"==": [{"var": "membership_level"}, "enterprise"]},
+      "then": {
+        "ui_modify": {
+          "transfer_amount": {"min": 1, "max": 1000000},
+          "transfer_note": {"max_length": 2000},
+          "api_key": {"visible": true, "required": true}
+        },
+        "set": {"daily_limit_remaining": 1000000}
+      }
+    },
+    {
+      "id": "check_over_limit",
+      "when": {"and": [
+        {">": [{"var": "transfer_amount"}, {"var": "daily_limit_remaining"}]},
+        {"!=": [{"var": "daily_limit_remaining"}, null]}
+      ]},
+      "then": {
+        "error_msg": "Transfer amount exceeds daily limit for your membership tier"
+      }
+    }
+  ]
+}

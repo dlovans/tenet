@@ -103,6 +103,21 @@ func Run(jsonText string) (*Result, error) {
 		}
 	}
 
+	// Also check variables in "then.set" values
+	for _, rule := range s.LogicTree {
+		if rule == nil || rule.Then == nil || rule.Then.Set == nil {
+			continue
+		}
+		for _, val := range rule.Then.Set {
+			varsInSet := extractVars(val)
+			for _, v := range varsInSet {
+				if !definedFields[v] {
+					result.addError(v, rule.ID, fmt.Sprintf("undefined variable '%s' in rule set expression", v))
+				}
+			}
+		}
+	}
+
 	// Check 2: Potential cycles (fields set by multiple rules)
 	fieldSetBy := make(map[string][]string)
 	for _, rule := range s.LogicTree {

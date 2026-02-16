@@ -1,0 +1,112 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "falsy_values",
+  "version": "2026.01",
+
+  "definitions": {
+    "is_active": {
+      "type": "boolean",
+      "value": false,
+      "label": "Account Active?",
+      "required": true
+    },
+    "balance": {
+      "type": "currency",
+      "value": 0,
+      "label": "Account Balance ($)",
+      "required": true,
+      "min": 0
+    },
+    "nickname": {
+      "type": "string",
+      "value": "",
+      "label": "Account Nickname",
+      "required": false
+    },
+    "required_name": {
+      "type": "string",
+      "value": "",
+      "label": "Account Holder Name",
+      "required": true
+    },
+    "failed_logins": {
+      "type": "number",
+      "value": 0,
+      "label": "Failed Login Attempts",
+      "required": true,
+      "min": 0
+    },
+    "opted_out": {
+      "type": "boolean",
+      "value": false,
+      "label": "Marketing Opt-Out",
+      "required": true
+    },
+    "account_state": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    },
+    "balance_status": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    },
+    "zero_is_preserved": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    },
+    "false_is_preserved": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "inactive_account",
+      "when": {"==": [{"var": "is_active"}, false]},
+      "then": {
+        "set": {"account_state": "suspended"}
+      }
+    },
+    {
+      "id": "active_account",
+      "when": {"==": [{"var": "is_active"}, true]},
+      "then": {
+        "set": {"account_state": "active"}
+      }
+    },
+    {
+      "id": "zero_balance",
+      "when": {"==": [{"var": "balance"}, 0]},
+      "then": {
+        "set": {"balance_status": "zero_balance"}
+      }
+    },
+    {
+      "id": "positive_balance",
+      "when": {">": [{"var": "balance"}, 0]},
+      "then": {
+        "set": {"balance_status": "funded"}
+      }
+    },
+    {
+      "id": "verify_zero_preserved",
+      "when": {"==": [{"var": "failed_logins"}, 0]},
+      "then": {
+        "set": {"zero_is_preserved": true}
+      }
+    },
+    {
+      "id": "verify_false_preserved",
+      "when": {"==": [{"var": "opted_out"}, false]},
+      "then": {
+        "set": {"false_is_preserved": true}
+      }
+    }
+  ]
+}

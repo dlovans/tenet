@@ -1,0 +1,83 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "pattern_validation",
+  "version": "2026.01",
+
+  "definitions": {
+    "email": {
+      "type": "string",
+      "value": "user@example.com",
+      "label": "Email Address",
+      "required": true,
+      "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    },
+    "phone": {
+      "type": "string",
+      "value": "555-123-4567",
+      "label": "Phone Number",
+      "required": true,
+      "pattern": "^\\d{3}-\\d{3}-\\d{4}$"
+    },
+    "zip_code": {
+      "type": "string",
+      "value": "90210",
+      "label": "ZIP Code",
+      "required": true,
+      "min_length": 5,
+      "max_length": 10,
+      "pattern": "^\\d{5}(-\\d{4})?$"
+    },
+    "username": {
+      "type": "string",
+      "value": "john_doe_42",
+      "label": "Username",
+      "required": true,
+      "min_length": 3,
+      "max_length": 20,
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+    },
+    "bad_email": {
+      "type": "string",
+      "value": "not-an-email",
+      "label": "Invalid Email (should fail)",
+      "required": true,
+      "pattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    },
+    "short_name": {
+      "type": "string",
+      "value": "A",
+      "label": "Name (too short, should fail)",
+      "required": true,
+      "min_length": 2,
+      "max_length": 50
+    },
+    "long_code": {
+      "type": "string",
+      "value": "ABCDEFGHIJK",
+      "label": "Code (too long, should fail)",
+      "required": true,
+      "min_length": 1,
+      "max_length": 5
+    },
+    "validation_summary": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "all_valid_check",
+      "when": {"and": [
+        {"!=": [{"var": "email"}, null]},
+        {"!=": [{"var": "phone"}, null]},
+        {"!=": [{"var": "zip_code"}, null]}
+      ]},
+      "then": {
+        "set": {"validation_summary": "core_fields_present"}
+      }
+    }
+  ]
+}

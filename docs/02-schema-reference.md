@@ -55,7 +55,7 @@ Each definition is a typed field:
 | `label` | string | Human-readable label |
 | `required` | boolean | Is this field required? |
 | `readonly` | boolean | `true` = computed, `false` = user-editable |
-| `visible` | boolean | UI visibility hint |
+| `visible` | boolean | UI visibility (defaults to `true` when not specified) |
 | `options` | array | Options for `select` type |
 
 ### Numeric Constraints
@@ -192,12 +192,15 @@ Rules with a matching `logic_version` are enabled; others are disabled.
 
 ## Validation Errors
 
+Each error includes a `kind` field for programmatic status determination:
+
 ```json
 {
   "errors": [
     {
       "field_id": "loan_amount",
       "rule_id": "max_limit_rule",
+      "kind": "constraint_violation",
       "message": "Loan amount exceeds maximum of 500000",
       "law_ref": "Lending Act §12.3"
     }
@@ -205,12 +208,25 @@ Rules with a matching `logic_version` are enabled; others are disabled.
 }
 ```
 
+### ErrorKind Values
+
+| Kind | Meaning | Affects Status |
+|------|---------|----------------|
+| `type_mismatch` | Value doesn't match declared type | INVALID |
+| `missing_required` | Required field has no value | INCOMPLETE |
+| `constraint_violation` | Value violates min/max/pattern/length | INVALID |
+| `attestation_incomplete` | Required attestation not signed/missing evidence | INCOMPLETE |
+| `runtime_warning` | Non-fatal issue (e.g., conflicting rule sets) | Does not change status |
+| `cycle_detected` | Derived field dependency cycle detected | Does not change status |
+
 ---
 
 ## Document Status
 
 | Status | Meaning |
 |--------|---------|
-| `READY` | All validations pass |
-| `INCOMPLETE` | Missing required fields or attestations |
-| `INVALID` | Type errors or constraint violations |
+| `READY` | All validations pass, no `type_mismatch`, `missing_required`, `constraint_violation`, or `attestation_incomplete` errors |
+| `INCOMPLETE` | Has `missing_required` or `attestation_incomplete` errors (but no `type_mismatch` or `constraint_violation`) |
+| `INVALID` | Has `type_mismatch` or `constraint_violation` errors |
+
+Status is determined from the `kind` of each error — `runtime_warning` and `cycle_detected` do not affect status.

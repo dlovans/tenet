@@ -146,7 +146,7 @@ function getVar(path: string, state: EvalState, resolve?: ResolveFn): unknown {
 
     // Check if variable is defined (only for root-level vars, not nested access)
     if (!isVariableDefined(rootVar, state) && state.currentElement === undefined) {
-        addError(state, '', '', `Undefined variable '${rootVar}' in logic expression`);
+        addError(state, '', '', 'runtime_warning', `Undefined variable '${rootVar}' in logic expression`);
         return null;
     }
 
@@ -154,8 +154,14 @@ function getVar(path: string, state: EvalState, resolve?: ResolveFn): unknown {
     if (state.schema.state_model?.derived && resolve) {
         const derived = state.schema.state_model.derived[rootVar];
         if (derived?.eval) {
-            // Evaluate the derived expression on-demand
+            // Cycle detection for derived fields
+            if (state.derivedInProgress.has(rootVar)) {
+                addError(state, '', '', 'cycle_detected', `Circular dependency detected in derived field '${rootVar}'`);
+                return null;
+            }
+            state.derivedInProgress.add(rootVar);
             const result = resolve(derived.eval, state);
+            state.derivedInProgress.delete(rootVar);
             if (parts.length === 1) {
                 return result;
             }
@@ -514,7 +520,7 @@ export function applyOperator(
 ): unknown {
     const fn = operators[op];
     if (!fn) {
-        addError(state, '', '', `Unknown operator '${op}' in logic expression`);
+        addError(state, '', '', 'runtime_warning', `Unknown operator '${op}' in logic expression`);
         return null;
     }
     return fn(args, state, resolve);

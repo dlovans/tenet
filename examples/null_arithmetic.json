@@ -1,0 +1,93 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "null_arithmetic",
+  "version": "2026.01",
+
+  "definitions": {
+    "revenue": {
+      "type": "currency",
+      "value": 50000,
+      "label": "Revenue ($)",
+      "required": true
+    },
+    "expenses": {
+      "type": "currency",
+      "value": null,
+      "label": "Expenses ($)",
+      "required": false
+    },
+    "headcount": {
+      "type": "number",
+      "value": 0,
+      "label": "Team Size",
+      "required": true
+    },
+    "profit": {
+      "type": "currency",
+      "value": null,
+      "label": "Profit ($)",
+      "readonly": true
+    },
+    "revenue_per_head": {
+      "type": "currency",
+      "value": null,
+      "label": "Revenue Per Head ($)",
+      "readonly": true
+    },
+    "profit_margin": {
+      "type": "number",
+      "value": null,
+      "label": "Profit Margin",
+      "readonly": true
+    },
+    "financial_health": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "state_model": {
+    "inputs": ["revenue", "expenses", "headcount"],
+    "derived": {
+      "profit": {
+        "eval": {"-": [{"var": "revenue"}, {"var": "expenses"}]}
+      },
+      "revenue_per_head": {
+        "eval": {"/": [{"var": "revenue"}, {"var": "headcount"}]}
+      },
+      "profit_margin": {
+        "eval": {"/": [{"var": "profit"}, {"var": "revenue"}]}
+      }
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "healthy_financials",
+      "when": {"and": [
+        {">": [{"var": "profit"}, 0]},
+        {">": [{"var": "profit_margin"}, 0.1]}
+      ]},
+      "then": {
+        "set": {"financial_health": "healthy"}
+      }
+    },
+    {
+      "id": "unhealthy_financials",
+      "when": {"<": [{"var": "profit"}, 0]},
+      "then": {
+        "set": {"financial_health": "loss"},
+        "error_msg": "Operating at a loss"
+      }
+    },
+    {
+      "id": "null_data_warning",
+      "when": {"==": [{"var": "expenses"}, null]},
+      "then": {
+        "set": {"financial_health": "incomplete_data"}
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ package tenet
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -98,7 +99,7 @@ func (e *Engine) executeOperator(op string, args any) any {
 
 	default:
 		// Unknown operator - add error and return nil
-		e.addError("", "", fmt.Sprintf("Unknown operator '%s' in logic expression", op), "")
+		e.addError("", "", ErrRuntimeWarning, fmt.Sprintf("Unknown operator '%s' in logic expression", op), "")
 		return nil
 	}
 }
@@ -390,7 +391,7 @@ func (e *Engine) opIn(needle, haystack any) bool {
 		if !ok {
 			return false
 		}
-		return len(needleStr) > 0 && len(h) > 0 && contains(h, needleStr)
+		return strings.Contains(h, needleStr)
 
 	default:
 		return false
@@ -398,6 +399,19 @@ func (e *Engine) opIn(needle, haystack any) bool {
 }
 
 // === Helper Functions ===
+
+// isSlice returns true if the value is a slice/array (e.g. []any from JSON).
+func isSlice(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch v.(type) {
+	case []any, []string, []float64, []int:
+		return true
+	default:
+		return false
+	}
+}
 
 // toFloat converts a value to float64 if possible.
 func toFloat(v any) (float64, bool) {
@@ -444,12 +458,3 @@ func parseDate(v any) (time.Time, bool) {
 	}
 }
 
-// contains checks if a string contains a substring.
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

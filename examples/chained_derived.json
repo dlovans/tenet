@@ -1,0 +1,141 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "chained_derived",
+  "version": "2026.01",
+
+  "definitions": {
+    "base_salary": {
+      "type": "currency",
+      "value": 80000,
+      "label": "Base Annual Salary ($)",
+      "required": true,
+      "min": 0
+    },
+    "bonus_pct": {
+      "type": "number",
+      "value": 15,
+      "label": "Bonus Percentage",
+      "required": true,
+      "min": 0,
+      "max": 100
+    },
+    "state_tax_rate": {
+      "type": "number",
+      "value": 0.05,
+      "label": "State Tax Rate",
+      "required": true,
+      "min": 0,
+      "max": 1,
+      "step": 0.01
+    },
+    "bonus_amount": {
+      "type": "currency",
+      "value": null,
+      "label": "Bonus Amount ($)",
+      "readonly": true
+    },
+    "gross_compensation": {
+      "type": "currency",
+      "value": null,
+      "label": "Total Gross Compensation ($)",
+      "readonly": true
+    },
+    "federal_tax": {
+      "type": "currency",
+      "value": null,
+      "label": "Estimated Federal Tax ($)",
+      "readonly": true
+    },
+    "state_tax": {
+      "type": "currency",
+      "value": null,
+      "label": "Estimated State Tax ($)",
+      "readonly": true
+    },
+    "total_tax": {
+      "type": "currency",
+      "value": null,
+      "label": "Total Estimated Tax ($)",
+      "readonly": true
+    },
+    "net_compensation": {
+      "type": "currency",
+      "value": null,
+      "label": "Estimated Net Compensation ($)",
+      "readonly": true
+    },
+    "effective_tax_rate": {
+      "type": "number",
+      "value": null,
+      "label": "Effective Tax Rate",
+      "readonly": true
+    },
+    "compensation_tier": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "state_model": {
+    "inputs": ["base_salary", "bonus_pct", "state_tax_rate"],
+    "derived": {
+      "bonus_amount": {
+        "eval": {"*": [{"var": "base_salary"}, {"/": [{"var": "bonus_pct"}, 100]}]}
+      },
+      "gross_compensation": {
+        "eval": {"+": [{"var": "base_salary"}, {"var": "bonus_amount"}]}
+      },
+      "federal_tax": {
+        "eval": {"*": [{"var": "gross_compensation"}, 0.22]}
+      },
+      "state_tax": {
+        "eval": {"*": [{"var": "gross_compensation"}, {"var": "state_tax_rate"}]}
+      },
+      "total_tax": {
+        "eval": {"+": [{"var": "federal_tax"}, {"var": "state_tax"}]}
+      },
+      "net_compensation": {
+        "eval": {"-": [{"var": "gross_compensation"}, {"var": "total_tax"}]}
+      },
+      "effective_tax_rate": {
+        "eval": {"/": [{"var": "total_tax"}, {"var": "gross_compensation"}]}
+      }
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "tier_executive",
+      "when": {">=": [{"var": "gross_compensation"}, 150000]},
+      "then": {
+        "set": {"compensation_tier": "executive"}
+      }
+    },
+    {
+      "id": "tier_senior",
+      "when": {"and": [
+        {">=": [{"var": "gross_compensation"}, 100000]},
+        {"<": [{"var": "gross_compensation"}, 150000]}
+      ]},
+      "then": {
+        "set": {"compensation_tier": "senior"}
+      }
+    },
+    {
+      "id": "tier_standard",
+      "when": {"<": [{"var": "gross_compensation"}, 100000]},
+      "then": {
+        "set": {"compensation_tier": "standard"}
+      }
+    },
+    {
+      "id": "high_tax_warning",
+      "when": {">": [{"var": "effective_tax_rate"}, 0.30]},
+      "then": {
+        "error_msg": "Effective tax rate exceeds 30% - consider tax optimization strategies"
+      }
+    }
+  ]
+}

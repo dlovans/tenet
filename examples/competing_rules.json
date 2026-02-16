@@ -1,0 +1,67 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "competing_rules",
+  "version": "2026.01",
+
+  "definitions": {
+    "score": {
+      "type": "number",
+      "value": 85,
+      "label": "Applicant Score",
+      "required": true,
+      "min": 0,
+      "max": 100
+    },
+    "years_experience": {
+      "type": "number",
+      "value": 12,
+      "label": "Years of Experience",
+      "required": true,
+      "min": 0
+    },
+    "risk_level": {
+      "type": "string",
+      "value": null,
+      "label": "Assessed Risk Level",
+      "readonly": true
+    },
+    "approval_tier": {
+      "type": "string",
+      "value": null,
+      "label": "Approval Tier",
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "score_based_risk",
+      "when": {">=": [{"var": "score"}, 80]},
+      "then": {
+        "set": {"risk_level": "low"}
+      }
+    },
+    {
+      "id": "experience_based_risk",
+      "when": {">=": [{"var": "years_experience"}, 10]},
+      "then": {
+        "set": {"risk_level": "minimal"}
+      }
+    },
+    {
+      "id": "tier_from_score",
+      "when": {">=": [{"var": "score"}, 70]},
+      "then": {
+        "set": {"approval_tier": "gold"}
+      }
+    },
+    {
+      "id": "tier_from_experience",
+      "when": {">=": [{"var": "years_experience"}, 15]},
+      "then": {
+        "set": {"approval_tier": "platinum"}
+      }
+    }
+  ]
+}

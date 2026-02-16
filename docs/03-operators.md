@@ -98,6 +98,36 @@ Dates can be ISO 8601 strings (`"2025-01-16"`) or variables.
 | Operator | Example | Description |
 |----------|---------|-------------|
 | `in` | `{"in": [{"var": "status"}, ["active", "pending"]]}` | Value in array |
+| `in` | `{"in": ["sub", {"var": "description"}]}` | Substring in string |
+| `some` | `{"some": [{"var": "scores"}, {">": [{"var": ""}, 90]}]}` | Any element matches |
+| `all` | `{"all": [{"var": "scores"}, {">=": [{"var": ""}, 60]}]}` | Every element matches |
+| `none` | `{"none": [{"var": "flags"}, {"==": [{"var": ""}, "blocked"]}]}` | No element matches |
+
+### Collection Operator Details
+
+The `some`, `all`, and `none` operators iterate over an array-valued definition. Inside the condition, `{"var": ""}` refers to the current element.
+
+```json
+{
+  "definitions": {
+    "scores": {"type": "number", "value": [85, 92, 78, 95]}
+  },
+  "logic_tree": [
+    {
+      "id": "has_excellent",
+      "when": {"some": [{"var": "scores"}, {">=": [{"var": ""}, 90]}]},
+      "then": {"set": {"has_excellent_score": true}}
+    },
+    {
+      "id": "all_passing",
+      "when": {"all": [{"var": "scores"}, {">=": [{"var": ""}, 60]}]},
+      "then": {"set": {"all_passed": true}}
+    }
+  ]
+}
+```
+
+> **Note:** When a definition holds an array value, the declared `type` describes the element type. For example, `"type": "number"` with `"value": [85, 92, 78]` means an array of numbers.
 
 ---
 

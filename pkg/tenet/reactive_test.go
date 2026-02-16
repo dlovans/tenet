@@ -223,7 +223,7 @@ func TestUIModification(t *testing.T) {
 			t.Fatal("income_verification not found")
 		}
 
-		if !attestation.Visible {
+		if attestation.Visible == nil || !*attestation.Visible {
 			t.Error("income_verification should be visible")
 		}
 		if !attestation.Required {

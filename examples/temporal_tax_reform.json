@@ -1,0 +1,110 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "temporal_tax_reform",
+  "version": "2026.01",
+
+  "definitions": {
+    "income": {
+      "type": "currency",
+      "value": 75000,
+      "label": "Annual Income ($)",
+      "required": true,
+      "min": 0
+    },
+    "tax_rate": {
+      "type": "number",
+      "value": null,
+      "label": "Applicable Tax Rate",
+      "readonly": true
+    },
+    "tax_regime": {
+      "type": "string",
+      "value": null,
+      "label": "Tax Regime",
+      "readonly": true
+    },
+    "surcharge_applies": {
+      "type": "boolean",
+      "value": false,
+      "readonly": true
+    }
+  },
+
+  "temporal_map": [
+    {
+      "valid_range": ["2024-01-01", "2024-12-31"],
+      "logic_version": "v2024",
+      "status": "ARCHIVED"
+    },
+    {
+      "valid_range": ["2025-01-01", "2025-12-31"],
+      "logic_version": "v2025",
+      "status": "ARCHIVED"
+    },
+    {
+      "valid_range": ["2026-01-01", null],
+      "logic_version": "v2026",
+      "status": "ACTIVE"
+    }
+  ],
+
+  "logic_tree": [
+    {
+      "id": "tax_2024_low",
+      "logic_version": "v2024",
+      "when": {"<": [{"var": "income"}, 50000]},
+      "then": {
+        "set": {"tax_rate": 0.15, "tax_regime": "2024 Standard"}
+      }
+    },
+    {
+      "id": "tax_2024_high",
+      "logic_version": "v2024",
+      "when": {">=": [{"var": "income"}, 50000]},
+      "then": {
+        "set": {"tax_rate": 0.28, "tax_regime": "2024 Standard"}
+      }
+    },
+    {
+      "id": "tax_2025_low",
+      "logic_version": "v2025",
+      "when": {"<": [{"var": "income"}, 60000]},
+      "then": {
+        "set": {"tax_rate": 0.12, "tax_regime": "2025 Reformed"}
+      }
+    },
+    {
+      "id": "tax_2025_high",
+      "logic_version": "v2025",
+      "when": {">=": [{"var": "income"}, 60000]},
+      "then": {
+        "set": {"tax_rate": 0.25, "tax_regime": "2025 Reformed"}
+      }
+    },
+    {
+      "id": "tax_2026_low",
+      "logic_version": "v2026",
+      "when": {"<": [{"var": "income"}, 70000]},
+      "then": {
+        "set": {"tax_rate": 0.10, "tax_regime": "2026 Simplified"}
+      }
+    },
+    {
+      "id": "tax_2026_high",
+      "logic_version": "v2026",
+      "when": {">=": [{"var": "income"}, 70000]},
+      "then": {
+        "set": {"tax_rate": 0.22, "tax_regime": "2026 Simplified"}
+      }
+    },
+    {
+      "id": "universal_surcharge",
+      "when": {">": [{"var": "income"}, 100000]},
+      "then": {
+        "set": {"surcharge_applies": true},
+        "error_msg": "High-income surcharge applies"
+      }
+    }
+  ]
+}

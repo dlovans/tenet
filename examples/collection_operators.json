@@ -1,0 +1,106 @@
+{
+  "$schema": "https://tenet.dev/schema/v1.json",
+  "protocol": "Tenet_v1.0",
+  "schema_id": "collection_operators",
+  "version": "2026.01",
+
+  "definitions": {
+    "applicant_country": {
+      "type": "string",
+      "value": "US",
+      "label": "Country of Residence",
+      "required": true
+    },
+    "certifications": {
+      "type": "string",
+      "value": ["AWS", "GCP", "CISSP"],
+      "label": "Certifications Held"
+    },
+    "test_scores": {
+      "type": "number",
+      "value": [85, 92, 78, 95, 88],
+      "label": "Module Test Scores"
+    },
+    "flagged_items": {
+      "type": "string",
+      "value": [],
+      "label": "Flagged Compliance Items"
+    },
+    "eligible_country": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    },
+    "has_security_cert": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    },
+    "all_scores_passing": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    },
+    "no_flags": {
+      "type": "boolean",
+      "value": null,
+      "readonly": true
+    },
+    "overall_status": {
+      "type": "string",
+      "value": null,
+      "readonly": true
+    }
+  },
+
+  "logic_tree": [
+    {
+      "id": "check_country_eligibility",
+      "when": {"in": [{"var": "applicant_country"}, ["US", "CA", "UK", "DE", "FR", "JP", "AU"]]},
+      "then": {
+        "set": {"eligible_country": true}
+      }
+    },
+    {
+      "id": "check_country_ineligible",
+      "when": {"not": {"in": [{"var": "applicant_country"}, ["US", "CA", "UK", "DE", "FR", "JP", "AU"]]}},
+      "then": {
+        "set": {"eligible_country": false},
+        "error_msg": "Applicant's country is not in the eligible list"
+      }
+    },
+    {
+      "id": "check_security_certification",
+      "when": {"some": [{"var": "certifications"}, {"in": [{"var": ""}, ["CISSP", "CISM", "CEH", "CompTIA Security+"]]}]},
+      "then": {
+        "set": {"has_security_cert": true}
+      }
+    },
+    {
+      "id": "check_all_scores_passing",
+      "when": {"all": [{"var": "test_scores"}, {">=": [{"var": ""}, 70]}]},
+      "then": {
+        "set": {"all_scores_passing": true}
+      }
+    },
+    {
+      "id": "check_no_flags",
+      "when": {"none": [{"var": "flagged_items"}, {"==": [{"var": ""}, "critical"]}]},
+      "then": {
+        "set": {"no_flags": true}
+      }
+    },
+    {
+      "id": "determine_overall_approved",
+      "when": {"and": [
+        {"==": [{"var": "eligible_country"}, true]},
+        {"==": [{"var": "has_security_cert"}, true]},
+        {"==": [{"var": "all_scores_passing"}, true]},
+        {"==": [{"var": "no_flags"}, true]}
+      ]},
+      "then": {
+        "set": {"overall_status": "approved"}
+      }
+    }
+  ]
+}

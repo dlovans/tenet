@@ -64,11 +64,11 @@ func BenchmarkVerify(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		valid, err := Verify(completedDoc, baseSchema)
-		if err != nil {
-			b.Fatal(err)
+		result := Verify(completedDoc, baseSchema)
+		if result.Error != "" {
+			b.Fatal(result.Error)
 		}
-		if !valid {
+		if !result.Valid {
 			b.Fatal("expected valid")
 		}
 	}
@@ -85,11 +85,11 @@ func BenchmarkVerifyParallel(b *testing.B) {
 
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			valid, err := Verify(completedDoc, baseSchema)
-			if err != nil {
-				b.Fatal(err)
+			result := Verify(completedDoc, baseSchema)
+			if result.Error != "" {
+				b.Fatal(result.Error)
 			}
-			if !valid {
+			if !result.Valid {
 				b.Fatal("expected valid")
 			}
 		}

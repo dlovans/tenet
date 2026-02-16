@@ -67,10 +67,10 @@ Because Tenet is a general-purpose declarative logic engine, developers have fou
 
 ```bash
 # Go
-go get github.com/yourusername/tenet/pkg/tenet
+go get github.com/dlovans/tenet/pkg/tenet
 
-# npm (browser + Node.js)
-npm install @tenet/core
+# npm (browser + Node.js) — pure TypeScript, no WASM
+npm install @dlovans/tenet-core
 ```
 
 ## Next Steps

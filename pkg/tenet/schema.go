@@ -33,12 +33,12 @@ const (
 // Value is kept as nil when not set (distinguishes "unknown" from "zero").
 type Definition struct {
 	Type     string   `json:"type"`               // "string", "number", "select", "attestation", "date", "boolean", "currency"
-	Value    any      `json:"value,omitempty"`    // Current value (nil = not set)
+	Value    any      `json:"value"`              // Current value (nil = not set)
 	Options  []string `json:"options,omitempty"`  // For "select" type
 	Label    string   `json:"label,omitempty"`    // Human-readable label
 	Required bool     `json:"required,omitempty"` // Is this field required?
 	Readonly bool     `json:"readonly,omitempty"` // True = computed, False = user-editable
-	Visible  bool     `json:"visible"`            // UI visibility (default true)
+	Visible  *bool    `json:"visible,omitempty"`   // UI visibility (default true)
 
 	// Numeric constraints (for "number" and "currency" types)
 	Min  *float64 `json:"min,omitempty"`  // Minimum allowed value (nil = no minimum)
@@ -93,12 +93,25 @@ type DerivedDef struct {
 	Eval map[string]any `json:"eval"` // JSON-logic expression (uses same syntax as Rule.When)
 }
 
+// ErrorKind categorizes validation errors for programmatic status determination.
+type ErrorKind string
+
+const (
+	ErrTypeMismatch          ErrorKind = "type_mismatch"
+	ErrMissingRequired       ErrorKind = "missing_required"
+	ErrConstraintViolation   ErrorKind = "constraint_violation"
+	ErrAttestationIncomplete ErrorKind = "attestation_incomplete"
+	ErrRuntimeWarning        ErrorKind = "runtime_warning"
+	ErrCycleDetected         ErrorKind = "cycle_detected"
+)
+
 // ValidationError represents a validation failure tied to a field and law reference.
 type ValidationError struct {
-	FieldID string `json:"field_id,omitempty"` // Which definition failed
-	RuleID  string `json:"rule_id,omitempty"`  // Which rule emitted this error
-	Message string `json:"message"`            // Human-readable error
-	LawRef  string `json:"law_ref,omitempty"`  // Legal citation for the rule
+	FieldID string    `json:"field_id,omitempty"` // Which definition failed
+	RuleID  string    `json:"rule_id,omitempty"`  // Which rule emitted this error
+	Kind    ErrorKind `json:"kind"`               // Error category
+	Message string    `json:"message"`            // Human-readable error
+	LawRef  string    `json:"law_ref,omitempty"`  // Legal citation for the rule
 }
 
 // Attestation represents a legally-binding signature requirement.
@@ -125,4 +138,38 @@ type Evidence struct {
 	Timestamp       string `json:"timestamp,omitempty"`         // ISO 8601 when signed
 	SignerID        string `json:"signer_id,omitempty"`         // Who signed (email, user ID)
 	LogicVersion    string `json:"logic_version,omitempty"`     // Schema version at signing time
+}
+
+// VerifyIssueCode categorizes verification failures for programmatic handling.
+// UI layers map these codes to customer-friendly messages; the VM never decides presentation.
+type VerifyIssueCode string
+
+const (
+	VerifyUnknownField          VerifyIssueCode = "unknown_field"           // Submitted field doesn't exist in schema
+	VerifyComputedMismatch      VerifyIssueCode = "computed_mismatch"       // Readonly field value was tampered
+	VerifyAttestationUnsigned   VerifyIssueCode = "attestation_unsigned"    // Required attestation not signed
+	VerifyAttestationNoEvidence VerifyIssueCode = "attestation_no_evidence" // Signed but missing evidence
+	VerifyAttestationNoTimestamp VerifyIssueCode = "attestation_no_timestamp" // Evidence missing timestamp
+	VerifyStatusMismatch        VerifyIssueCode = "status_mismatch"         // Claimed status doesn't match computed
+	VerifyConvergenceFailed     VerifyIssueCode = "convergence_failed"      // Document didn't converge in max iterations
+	VerifyInternalError         VerifyIssueCode = "internal_error"          // Unexpected error (parse failure, panic, etc.)
+)
+
+// VerifyIssue is a single structured problem found during verification.
+type VerifyIssue struct {
+	Code     VerifyIssueCode `json:"code"`               // Machine-parseable issue code
+	FieldID  string          `json:"field_id,omitempty"`  // Which field/attestation is affected
+	Message  string          `json:"message"`             // Developer-readable explanation
+	Expected any             `json:"expected,omitempty"`  // What the VM computed
+	Claimed  any             `json:"claimed,omitempty"`   // What was submitted
+}
+
+// VerifyResult is the structured output of Verify().
+// Contains everything a UI or API consumer needs — the VM returns data, never opinions.
+type VerifyResult struct {
+	Valid  bool            `json:"valid"`            // Overall pass/fail
+	Status DocStatus       `json:"status,omitempty"` // Document status from the final run()
+	Issues []VerifyIssue   `json:"issues,omitempty"` // All problems found (not just the first)
+	Schema *Schema         `json:"schema,omitempty"` // The full re-run result (computed values, errors, status)
+	Error  string          `json:"error,omitempty"`  // Internal error (parse failure, panic recovery, etc.)
 }
