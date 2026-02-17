@@ -383,7 +383,11 @@ func (e *Engine) applyAction(action *Action, ruleID, lawRef string) {
 
 	// Emit error if specified
 	if action.ErrorMsg != "" {
-		e.addError("", ruleID, ErrConstraintViolation, action.ErrorMsg, lawRef)
+		kind := action.ErrorKind
+		if kind == "" {
+			kind = ErrConstraintViolation
+		}
+		e.addError("", ruleID, kind, action.ErrorMsg, lawRef)
 	}
 }
 

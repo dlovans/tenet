@@ -220,6 +220,7 @@ export function checkAttestations(
 
 /**
  * Determine document status based on ErrorKind.
+ * Non-blocking kinds (runtime_warning, cycle_detected, notice) do not affect status.
  */
 export function determineStatus(state: EvalState): DocStatus {
     for (const err of state.errors) {

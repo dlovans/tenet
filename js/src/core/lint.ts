@@ -641,6 +641,21 @@ function checkAction(
         }
     }
 
+    // Validate error_kind if present
+    if (action.error_kind !== undefined) {
+        const validKinds: ReadonlySet<string> = new Set([
+            'type_mismatch', 'missing_required', 'constraint_violation',
+            'attestation_incomplete', 'runtime_warning', 'cycle_detected', 'notice',
+        ]);
+        if (typeof action.error_kind !== 'string' || !validKinds.has(action.error_kind)) {
+            addIssue(ctx, 'error', 'invalid_error_kind',
+                `Rule '${ruleId}' has invalid error_kind '${action.error_kind}'`, {
+                    path: `${rulePath}.then.error_kind`,
+                    rule_id: ruleId,
+                });
+        }
+    }
+
     if (action.ui_modify) {
         for (const field of Object.keys(action.ui_modify)) {
             // W18: ui_modify targets undefined field

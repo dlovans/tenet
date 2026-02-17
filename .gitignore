@@ -12,6 +12,7 @@ js/node_modules/
 js/dist/
 js/.npm
 npm-debug.log*
+/node_modules
 
 # IDE
 .idea/

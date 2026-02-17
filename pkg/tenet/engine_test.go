@@ -270,6 +270,93 @@ func TestRunWithMissingRequired(t *testing.T) {
 	}
 }
 
+func TestErrorKindNotice(t *testing.T) {
+	input := `{
+		"protocol": "Test_v1",
+		"schema_id": "test",
+		"definitions": {
+			"level": {"type": "select", "value": "High", "options": ["Low", "High"]}
+		},
+		"logic_tree": [
+			{
+				"id": "rule_info",
+				"when": {"==": [{"var": "level"}, "High"]},
+				"then": {
+					"error_msg": "High level detected",
+					"error_kind": "notice"
+				}
+			}
+		]
+	}`
+
+	result, err := Run(input, time.Now())
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	var schema Schema
+	if err := json.Unmarshal([]byte(result), &schema); err != nil {
+		t.Fatalf("Failed to parse result: %v", err)
+	}
+
+	// Notice is non-blocking, so status should be READY
+	if schema.Status != StatusReady {
+		t.Errorf("Expected status READY with notice error_kind, got %v", schema.Status)
+	}
+
+	// Should still have the error with notice kind
+	if len(schema.Errors) != 1 {
+		t.Fatalf("Expected 1 error, got %d", len(schema.Errors))
+	}
+	if schema.Errors[0].Kind != ErrNotice {
+		t.Errorf("Expected error kind 'notice', got '%s'", schema.Errors[0].Kind)
+	}
+	if schema.Errors[0].Message != "High level detected" {
+		t.Errorf("Expected error message 'High level detected', got '%s'", schema.Errors[0].Message)
+	}
+}
+
+func TestErrorMsgDefaultKind(t *testing.T) {
+	input := `{
+		"protocol": "Test_v1",
+		"schema_id": "test",
+		"definitions": {
+			"level": {"type": "select", "value": "High", "options": ["Low", "High"]}
+		},
+		"logic_tree": [
+			{
+				"id": "rule_block",
+				"when": {"==": [{"var": "level"}, "High"]},
+				"then": {
+					"error_msg": "High level is not allowed"
+				}
+			}
+		]
+	}`
+
+	result, err := Run(input, time.Now())
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+
+	var schema Schema
+	if err := json.Unmarshal([]byte(result), &schema); err != nil {
+		t.Fatalf("Failed to parse result: %v", err)
+	}
+
+	// Default error_kind should be constraint_violation (blocking)
+	if schema.Status != StatusInvalid {
+		t.Errorf("Expected status INVALID with default error_kind, got %v", schema.Status)
+	}
+
+	if len(schema.Errors) != 1 {
+		t.Fatalf("Expected 1 error, got %d", len(schema.Errors))
+	}
+	if schema.Errors[0].Kind != ErrConstraintViolation {
+		t.Errorf("Expected error kind 'constraint_violation', got '%s'", schema.Errors[0].Kind)
+	}
+}
+
 func TestVerify(t *testing.T) {
 	oldJson := `{
 		"protocol": "Test_v1",

@@ -175,6 +175,7 @@ Version logic based on effective dates.
 | `set` | object | Values to set in definitions |
 | `ui_modify` | object | UI metadata changes |
 | `error_msg` | string | Validation error message |
+| `error_kind` | string | Error category for `error_msg` (defaults to `constraint_violation`). Use `notice` for non-blocking informational messages. |
 
 ### ui_modify Fields
 
@@ -466,4 +467,5 @@ Errors are accumulated (non-blocking) in the `errors` array. Each error includes
 | `attestation_incomplete` | Required attestation not signed or missing evidence |
 | `runtime_warning` | Non-fatal issue (e.g., cycle detected during rule evaluation) |
 | `cycle_detected` | Derived field dependency cycle detected |
+| `notice` | Schema-author informational message (via `error_kind` on action) |
 ```

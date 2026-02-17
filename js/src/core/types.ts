@@ -104,6 +104,7 @@ export interface Action {
     set?: Record<string, unknown>;
     ui_modify?: Record<string, unknown>;
     error_msg?: string;
+    error_kind?: ErrorKind;
 }
 
 export interface TemporalBranch {
@@ -127,7 +128,8 @@ export type ErrorKind =
     | 'constraint_violation'
     | 'attestation_incomplete'
     | 'runtime_warning'
-    | 'cycle_detected';
+    | 'cycle_detected'
+    | 'notice';
 
 export interface ValidationError {
     field_id?: string;

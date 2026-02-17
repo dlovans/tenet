@@ -68,9 +68,10 @@ type Rule struct {
 
 // Action represents what happens when a rule's condition is true.
 type Action struct {
-	Set      map[string]any `json:"set,omitempty"`       // Values to set in definitions
-	UIModify map[string]any `json:"ui_modify,omitempty"` // UI metadata changes (visible, ui_class, etc.)
-	ErrorMsg string         `json:"error_msg,omitempty"` // Validation error to emit
+	Set       map[string]any `json:"set,omitempty"`        // Values to set in definitions
+	UIModify  map[string]any `json:"ui_modify,omitempty"`  // UI metadata changes (visible, ui_class, etc.)
+	ErrorMsg  string         `json:"error_msg,omitempty"`  // Validation error to emit
+	ErrorKind ErrorKind      `json:"error_kind,omitempty"` // Error category for error_msg (defaults to constraint_violation)
 }
 
 // TemporalBranch routes logic based on effective dates.
@@ -103,6 +104,7 @@ const (
 	ErrAttestationIncomplete ErrorKind = "attestation_incomplete"
 	ErrRuntimeWarning        ErrorKind = "runtime_warning"
 	ErrCycleDetected         ErrorKind = "cycle_detected"
+	ErrNotice                ErrorKind = "notice"
 )
 
 // ValidationError represents a validation failure tied to a field and law reference.

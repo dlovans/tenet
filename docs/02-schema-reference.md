@@ -121,6 +121,7 @@ Rules are evaluated in order:
 | `set` | object | Values to set in definitions |
 | `ui_modify` | object | UI metadata changes |
 | `error_msg` | string | Validation error message |
+| `error_kind` | string | Error category for `error_msg` (defaults to `constraint_violation`). Use `notice` for non-blocking informational messages. |
 
 ### ui_modify Options
 
@@ -218,6 +219,7 @@ Each error includes a `kind` field for programmatic status determination:
 | `attestation_incomplete` | Required attestation not signed/missing evidence | INCOMPLETE |
 | `runtime_warning` | Non-fatal issue (e.g., conflicting rule sets) | Does not change status |
 | `cycle_detected` | Derived field dependency cycle detected | Does not change status |
+| `notice` | Schema-author informational message (via `error_kind` on action) | Does not change status |
 
 ---
 
@@ -229,4 +231,4 @@ Each error includes a `kind` field for programmatic status determination:
 | `INCOMPLETE` | Has `missing_required` or `attestation_incomplete` errors (but no `type_mismatch` or `constraint_violation`) |
 | `INVALID` | Has `type_mismatch` or `constraint_violation` errors |
 
-Status is determined from the `kind` of each error — `runtime_warning` and `cycle_detected` do not affect status.
+Status is determined from the `kind` of each error — `runtime_warning`, `cycle_detected`, and `notice` do not affect status.

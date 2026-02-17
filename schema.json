@@ -217,6 +217,19 @@
                 "error_msg": {
                     "type": "string",
                     "description": "Validation error message"
+                },
+                "error_kind": {
+                    "type": "string",
+                    "enum": [
+                        "type_mismatch",
+                        "missing_required",
+                        "constraint_violation",
+                        "attestation_incomplete",
+                        "runtime_warning",
+                        "cycle_detected",
+                        "notice"
+                    ],
+                    "description": "Error category for error_msg (defaults to constraint_violation). Use 'notice' for non-blocking informational messages."
                 }
             }
         },

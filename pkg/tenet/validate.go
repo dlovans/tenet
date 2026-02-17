@@ -169,6 +169,7 @@ func (e *Engine) isValidOption(value string, options []string) bool {
 }
 
 // determineStatus calculates the document status based on validation errors.
+// Non-blocking kinds (runtime_warning, cycle_detected, notice) do not affect status.
 func (e *Engine) determineStatus() DocStatus {
 	for _, err := range e.errors {
 		if err.Kind == ErrTypeMismatch {

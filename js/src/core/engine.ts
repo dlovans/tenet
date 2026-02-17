@@ -141,7 +141,7 @@ function applyAction(state: EvalState, action: Action | undefined, ruleId: strin
 
     // Emit error if specified
     if (action.error_msg) {
-        addError(state, '', ruleId, 'runtime_warning', action.error_msg, lawRef);
+        addError(state, '', ruleId, action.error_kind ?? 'constraint_violation', action.error_msg, lawRef);
     }
 }
 

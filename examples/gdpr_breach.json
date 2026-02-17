@@ -25,7 +25,8 @@
         },
         "requires_attestation": {
             "type": "boolean",
-            "value": false
+            "value": false,
+            "visible": false
         },
         "officer_assertion": {
             "type": "attestation",
@@ -60,7 +61,8 @@
                         "required": true
                     }
                 },
-                "error_msg": "Material impact requires reporting within 72 hours per GDPR Art. 33."
+                "error_msg": "Material impact requires reporting within 72 hours per GDPR Art. 33.",
+                "error_kind": "notice"
             }
         },
         {
